@@ -1,0 +1,20 @@
+<!-- Argo Rollouts Terminal Component -->
+<div>
+    <div class="card">
+        <div class="card-header">
+            <h2 class="card-title">Argo Rollouts Status</h2>
+            <div class="terminal-cmd">oc argo rollouts get rollout quarkus-demo --watch</div>
+        </div>
+        <div class="terminal" id="terminalRollout">
+            <div class="terminal-titlebar">
+                <div class="terminal-dots">
+                    <span class="terminal-dot red"></span>
+                    <span class="terminal-dot yellow"></span>
+                    <span class="terminal-dot green"></span>
+                </div>
+                <span class="terminal-tab">rollout — quarkus-demo</span>
+            </div>
+            <pre class="terminal-body" id="terminalRolloutBody">Connecting to cluster...</pre>
+        </div>
+    </div>
+</div>

@@ -3,15 +3,77 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI-Powered Progressive Delivery Demo</title>
+    <title>AIOps Command Center — Intelligent Release Management</title>
     {#bundle /}
 </head>
 <body>
+    <nav class="topbar">
+        <div class="topbar-left">
+            <div class="topbar-logo">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/>
+                </svg>
+                <span class="topbar-title">AIOps Command Center</span>
+            </div>
+            <span class="topbar-separator"></span>
+            <span class="topbar-breadcrumb">Intelligent Release Management</span>
+        </div>
+        <div class="topbar-right">
+            <div class="topbar-env">PRODUCTION</div>
+            <div class="topbar-meta">
+                <span class="topbar-meta-item" title="Cluster">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M2 12h20"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+                    us-east-1
+                </span>
+                <span class="topbar-meta-item" title="Namespace">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18"/><path d="M9 21V9"/></svg>
+                    quarkus-demo
+                </span>
+            </div>
+            <div class="topbar-clock" id="liveClock"></div>
+        </div>
+    </nav>
+
     <div class="container">
-        <div class="header">
-            <h1>🚀 AI-Powered Progressive Delivery</h1>
-            <p>Real-time Canary Rollout with Intelligent Analysis</p>
-            <div class="version-badge">Version: {version}</div>
+        <div class="page-header">
+            <div class="page-header-left">
+                <h1 class="page-title">Intelligent Release Management</h1>
+                <p class="page-subtitle">AI-driven canary analysis &middot; automated rollback &middot; real-time observability</p>
+            </div>
+            <div class="page-header-right">
+                <div class="version-badge">v{version}</div>
+                <div class="connection-status" id="connectionStatus">
+                    <span class="connection-dot"></span>
+                    <span>Connected</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="system-bar" id="systemBar">
+            <div class="system-stat">
+                <div class="system-stat-value" id="sysUptime">--</div>
+                <div class="system-stat-label">Uptime</div>
+            </div>
+            <div class="system-stat">
+                <div class="system-stat-value" id="sysTotalReqs">--</div>
+                <div class="system-stat-label">Total Requests</div>
+            </div>
+            <div class="system-stat">
+                <div class="system-stat-value" id="sysStableRate">--</div>
+                <div class="system-stat-label">Stable Success</div>
+            </div>
+            <div class="system-stat">
+                <div class="system-stat-value" id="sysCanaryRate">--</div>
+                <div class="system-stat-label">Canary Success</div>
+            </div>
+            <div class="system-stat">
+                <div class="system-stat-value" id="sysPhase">--</div>
+                <div class="system-stat-label">Rollout Phase</div>
+            </div>
+            <div class="system-stat">
+                <div class="system-stat-value" id="sysTraffic">--</div>
+                <div class="system-stat-label">Canary Traffic</div>
+            </div>
         </div>
 
         <div id="errorContainer"></div>
@@ -19,28 +81,26 @@
         <div class="main-grid">
             <!-- Left Column -->
             <div class="left-column">
-                <!-- Live Request Flow -->
                 {#include components/live-request-flow.html /}
-
-                <!-- AI Monitoring Panel -->
                 {#include components/ai-monitoring.html /}
             </div>
 
             <!-- Right Column -->
             <div class="right-column">
-                <!-- Traffic Distribution -->
                 {#include components/traffic-distribution.html /}
-
-                <!-- Rollout Progress (Vertical) -->
                 {#include components/rollout-progress.html /}
-
-                <!-- Deployment Status -->
                 {#include components/deployment-status.html /}
             </div>
         </div>
 
+        <div class="terminal-grid">
+            {#include components/terminal-rollout.html /}
+            {#include components/terminal-agent-logs.html /}
+        </div>
+
         <div class="footer">
-            <p>Powered by Quarkus • Argo Rollouts • AI Analysis Plugin</p>
+            <div class="footer-left">Quarkus {version} &middot; Argo Rollouts &middot; AI Analysis Plugin</div>
+            <div class="footer-right" id="footerTimestamp"></div>
         </div>
     </div>
 </body>
