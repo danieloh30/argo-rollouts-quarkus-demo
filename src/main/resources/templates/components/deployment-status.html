@@ -2,16 +2,25 @@
 <div>
     <div class="card">
         <div class="card-header">
-            <h2 class="card-title">Deployment Status</h2>
+            <h2 class="card-title">Deployment Info</h2>
+            <div class="deploy-revision" id="deployRevision"></div>
         </div>
-        <div class="metrics-grid">
-            <div class="metric-card deployment-status-grid">
-                <div class="metric-label">Current Phase</div>
-                <div class="metric-value deployment-status-value" id="deploymentStatusValue">--</div>
+        <div class="deploy-grid">
+            <div class="deploy-item">
+                <div class="deploy-label">Phase</div>
+                <div class="deploy-value" id="deploymentStatusValue">--</div>
             </div>
-            <div class="metric-card deployment-status-grid">
-                <div class="metric-label">Rollout Message</div>
-                <div class="metric-value deployment-status-message" id="rolloutMessage">--</div>
+            <div class="deploy-item">
+                <div class="deploy-label">Message</div>
+                <div class="deploy-value deploy-message" id="rolloutMessage">--</div>
+            </div>
+            <div class="deploy-item">
+                <div class="deploy-label">Image</div>
+                <div class="deploy-value deploy-mono" id="deployImage">ghcr.io/danieloh30/argo-rollouts-quarkus-demo:latest</div>
+            </div>
+            <div class="deploy-item">
+                <div class="deploy-label">Strategy</div>
+                <div class="deploy-value deploy-mono">Canary (Argo Rollouts)</div>
             </div>
         </div>
     </div>

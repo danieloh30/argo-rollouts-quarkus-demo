@@ -1,9 +1,119 @@
-// Dashboard JavaScript - Extracted from dashboard.html
-// This app will be bundled by the Web-Bundler and available using the {#bundle /} tag
-
 let previousSuccessRate = null;
 let previousErrorRate = null;
+const startTime = Date.now();
+let clusterConnected = false;
 
+// ── Simulated fallback data for dev mode / no cluster ──
+const FALLBACK_ROLLOUT_TERMINAL =
+    '<span class="t-bold">Name:            </span><span class="t-cyan">quarkus-demo</span>\n' +
+    '<span class="t-bold">Namespace:       </span><span class="t-cyan">quarkus-demo</span>\n' +
+    '<span class="t-bold">Status:          </span><span class="t-green">✔ Healthy</span>\n' +
+    '<span class="t-bold">Strategy:        </span>Canary\n' +
+    '<span class="t-bold">  Step:          </span>6/6\n' +
+    '<span class="t-bold">  SetWeight:     </span>100\n' +
+    '<span class="t-bold">  ActualWeight:  </span>100\n' +
+    '<span class="t-bold">Images:          </span><span class="t-blue">ghcr.io/danieloh30/argo-rollouts-quarkus-demo:latest</span> (stable)\n' +
+    '<span class="t-bold">Replicas:</span>\n' +
+    '<span class="t-bold">  Desired:       </span>3\n' +
+    '<span class="t-bold">  Current:       </span>3\n' +
+    '<span class="t-bold">  Updated:       </span>3\n' +
+    '<span class="t-bold">  Ready:         </span>3\n' +
+    '<span class="t-bold">  Available:     </span>3\n' +
+    '\n' +
+    '<span class="t-dim">NAME                                       KIND        STATUS     AGE    INFO</span>\n' +
+    '<span class="t-green">⟳ quarkus-demo                              Rollout     ✔ Healthy  12m</span>\n' +
+    '<span class="t-green">├──# revision:3                                                           </span>\n' +
+    '<span class="t-green">│  └──⧉ quarkus-demo-7f8d4b5c6             ReplicaSet  ✔ Healthy  12m    stable</span>\n' +
+    '<span class="t-green">│     ├──□ quarkus-demo-7f8d4b5c6-2k9xp    Pod         ✔ Running  12m    ready:1/1</span>\n' +
+    '<span class="t-green">│     ├──□ quarkus-demo-7f8d4b5c6-8m4vq    Pod         ✔ Running  12m    ready:1/1</span>\n' +
+    '<span class="t-green">│     └──□ quarkus-demo-7f8d4b5c6-wn7j3    Pod         ✔ Running  12m    ready:1/1</span>\n' +
+    '<span class="t-dim">├──# revision:2                                                           </span>\n' +
+    '<span class="t-dim">│  └──⧉ quarkus-demo-5c9b8d2a1             ReplicaSet  • ScaledDown  45m</span>\n' +
+    '<span class="t-dim">└──# revision:1                                                           </span>\n' +
+    '<span class="t-dim">   └──⧉ quarkus-demo-3a7e1f9c4             ReplicaSet  • ScaledDown  2h</span>';
+
+const FALLBACK_AGENT_LOGS =
+    '<span class="t-dim">2025-08-13T09:14:02Z</span> <span class="t-blue">INFO</span>  controller.appproject  Reconciling AppProject  <span class="t-dim">{"namespace": "openshift-gitops"}</span>\n' +
+    '<span class="t-dim">2025-08-13T09:14:03Z</span> <span class="t-blue">INFO</span>  controller.application  Refreshing app status  <span class="t-dim">{"application": "quarkus-demo"}</span>\n' +
+    '<span class="t-dim">2025-08-13T09:14:03Z</span> <span class="t-blue">INFO</span>  controller.application  Comparing app state  <span class="t-dim">{"application": "quarkus-demo", "revisionChanged": false}</span>\n' +
+    '<span class="t-dim">2025-08-13T09:14:04Z</span> <span class="t-green">INFO</span>  controller.application  App health check  <span class="t-dim">{"application": "quarkus-demo", "status": "Healthy"}</span>\n' +
+    '<span class="t-dim">2025-08-13T09:14:05Z</span> <span class="t-blue">INFO</span>  controller.cache  Cluster cache synced  <span class="t-dim">{"server": "https://kubernetes.default.svc", "resources": 847}</span>\n' +
+    '<span class="t-dim">2025-08-13T09:14:10Z</span> <span class="t-blue">INFO</span>  controller.appproject  Reconciling AppProject  <span class="t-dim">{"namespace": "openshift-gitops"}</span>\n' +
+    '<span class="t-dim">2025-08-13T09:14:12Z</span> <span class="t-blue">INFO</span>  controller.application  Sync operation completed  <span class="t-dim">{"application": "quarkus-demo", "phase": "Succeeded", "message": "successfully synced (all tasks run)"}</span>\n' +
+    '<span class="t-dim">2025-08-13T09:14:15Z</span> <span class="t-blue">INFO</span>  controller.application  Refreshing app status  <span class="t-dim">{"application": "quarkus-demo"}</span>\n' +
+    '<span class="t-dim">2025-08-13T09:14:15Z</span> <span class="t-green">INFO</span>  controller.application  App sync status  <span class="t-dim">{"application": "quarkus-demo", "syncStatus": "Synced", "healthStatus": "Healthy"}</span>\n' +
+    '<span class="t-dim">2025-08-13T09:14:20Z</span> <span class="t-blue">INFO</span>  controller.cache  Updated resource cache  <span class="t-dim">{"server": "https://kubernetes.default.svc", "namespace": "quarkus-demo", "kind": "Rollout"}</span>\n' +
+    '<span class="t-dim">2025-08-13T09:14:25Z</span> <span class="t-blue">INFO</span>  controller.application  Comparing app state  <span class="t-dim">{"application": "quarkus-demo", "revisionChanged": false}</span>\n' +
+    '<span class="t-dim">2025-08-13T09:14:30Z</span> <span class="t-green">INFO</span>  controller.application  App health check  <span class="t-dim">{"application": "quarkus-demo", "status": "Healthy"}</span>\n' +
+    '<span class="t-dim">2025-08-13T09:14:35Z</span> <span class="t-blue">INFO</span>  controller.appproject  Reconciling AppProject  <span class="t-dim">{"namespace": "openshift-gitops"}</span>\n' +
+    '<span class="t-dim">2025-08-13T09:14:40Z</span> <span class="t-blue">INFO</span>  controller.application  Refreshing app status  <span class="t-dim">{"application": "quarkus-demo"}</span>\n' +
+    '<span class="t-dim">2025-08-13T09:14:42Z</span> <span class="t-yellow">WARN</span>  controller.cache  Retrying resource watch  <span class="t-dim">{"server": "https://kubernetes.default.svc", "reason": "stream timeout"}</span>\n' +
+    '<span class="t-dim">2025-08-13T09:14:43Z</span> <span class="t-blue">INFO</span>  controller.cache  Resource watch re-established  <span class="t-dim">{"server": "https://kubernetes.default.svc"}</span>\n' +
+    '<span class="t-dim">2025-08-13T09:14:45Z</span> <span class="t-green">INFO</span>  controller.application  App sync status  <span class="t-dim">{"application": "quarkus-demo", "syncStatus": "Synced", "healthStatus": "Healthy"}</span>\n' +
+    '<span class="t-dim">2025-08-13T09:14:50Z</span> <span class="t-blue">INFO</span>  controller.application  Comparing app state  <span class="t-dim">{"application": "quarkus-demo", "revisionChanged": false}</span>';
+
+// ── Clock & uptime ──
+function updateClock() {
+    const el = document.getElementById('liveClock');
+    if (el) {
+        const now = new Date();
+        el.textContent = now.toLocaleTimeString('en-US', { hour12: false });
+    }
+}
+
+function updateUptime() {
+    const el = document.getElementById('sysUptime');
+    if (!el) return;
+    const elapsed = Math.floor((Date.now() - startTime) / 1000);
+    const h = Math.floor(elapsed / 3600);
+    const m = Math.floor((elapsed % 3600) / 60);
+    const s = elapsed % 60;
+    if (h > 0) {
+        el.textContent = h + 'h ' + m + 'm';
+    } else if (m > 0) {
+        el.textContent = m + 'm ' + s + 's';
+    } else {
+        el.textContent = s + 's';
+    }
+}
+
+function formatNumber(n) {
+    if (n >= 1000000) return (n / 1000000).toFixed(1) + 'M';
+    if (n >= 1000) return (n / 1000).toFixed(1) + 'K';
+    return n.toString();
+}
+
+function rateColorClass(rate) {
+    if (rate >= 95) return 'success';
+    if (rate >= 80) return 'warning';
+    return 'danger';
+}
+
+// ── Colorize live terminal output ──
+function colorizeRolloutOutput(text) {
+    return text
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+        .replace(/^(Name:|Namespace:|Status:|Message:|Strategy:|Images:|Replicas:)/gm, '<span class="t-bold">$1</span>')
+        .replace(/(✔\s*Healthy)/g, '<span class="t-green">$1</span>')
+        .replace(/(◑\s*Progressing)/g, '<span class="t-blue">$1</span>')
+        .replace(/(॥\s*Paused)/g, '<span class="t-yellow">$1</span>')
+        .replace(/(✖\s*Degraded)/g, '<span class="t-red">$1</span>')
+        .replace(/(\(stable\))/g, '<span class="t-green">$1</span>')
+        .replace(/(\(canary\))/g, '<span class="t-cyan">$1</span>');
+}
+
+function colorizeAgentLogs(text) {
+    return text
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+        .replace(/^(\d{4}-\d{2}-\d{2}T[\d:.]+Z?)/gm, '<span class="t-dim">$1</span>')
+        .replace(/\bINFO\b/g, '<span class="t-blue">INFO</span>')
+        .replace(/\bWARN\b/g, '<span class="t-yellow">WARN</span>')
+        .replace(/\bERROR\b/g, '<span class="t-red">ERROR</span>')
+        .replace(/("Healthy"|"Succeeded"|"Synced")/g, '<span class="t-green">$1</span>')
+        .replace(/("Failed"|"Degraded"|"Error")/g, '<span class="t-red">$1</span>');
+}
+
+// ── Dashboard update ──
 function updateDashboard() {
     Promise.all([
         fetch('/api/status').then(r => r.json()),
@@ -11,46 +121,133 @@ function updateDashboard() {
         fetch('/api/rollout/metrics').then(r => r.json())
     ])
     .then(([metricsData, rolloutData, versionMetrics]) => {
+        clusterConnected = rolloutData.phase !== 'Error' && rolloutData.phase !== 'Unknown';
         updateRolloutProgress(rolloutData);
         updateTrafficDistribution(rolloutData);
         updateAIAnalysis(rolloutData, metricsData, versionMetrics);
         visualizeRealRequests(versionMetrics);
+        updateSystemBar(rolloutData, versionMetrics);
+        updateConnectionStatus(true);
         clearError();
     })
     .catch(error => {
         console.error('Error updating dashboard:', error);
+        clusterConnected = false;
         const isConnectionError = error.message.includes('Failed to fetch') ||
                                  error.message.includes('NetworkError') ||
                                  error.message.includes('fetch');
         if (isConnectionError) {
-            showError('⚠️ Not connected to cluster. Running in demo mode with simulated data.');
+            showError('Not connected to cluster. Showing simulated data.');
             showDemoMode();
+            updateConnectionStatus(false);
         } else {
             showError('Failed to fetch dashboard data: ' + error.message);
         }
     });
 }
 
+// ── Terminal updates ──
+function updateTerminals() {
+    // Rollout terminal
+    fetch('/api/terminal/rollout')
+        .then(r => r.json())
+        .then(data => {
+            const body = document.getElementById('terminalRolloutBody');
+            if (!body) return;
+            if (data.connected && data.output) {
+                body.innerHTML = colorizeRolloutOutput(data.output);
+            } else {
+                body.innerHTML = FALLBACK_ROLLOUT_TERMINAL;
+            }
+            autoScroll(body);
+        })
+        .catch(() => {
+            const body = document.getElementById('terminalRolloutBody');
+            if (body) body.innerHTML = FALLBACK_ROLLOUT_TERMINAL;
+        });
+
+    // Agent logs terminal
+    fetch('/api/terminal/agent-logs')
+        .then(r => r.json())
+        .then(data => {
+            const body = document.getElementById('terminalAgentLogsBody');
+            if (!body) return;
+            if (data.connected && data.output) {
+                body.innerHTML = colorizeAgentLogs(data.output);
+            } else {
+                body.innerHTML = FALLBACK_AGENT_LOGS;
+            }
+            autoScroll(body);
+        })
+        .catch(() => {
+            const body = document.getElementById('terminalAgentLogsBody');
+            if (body) body.innerHTML = FALLBACK_AGENT_LOGS;
+        });
+}
+
+function autoScroll(el) {
+    el.scrollTop = el.scrollHeight;
+}
+
+function updateConnectionStatus(connected) {
+    const el = document.getElementById('connectionStatus');
+    if (!el) return;
+    if (connected) {
+        el.className = 'connection-status';
+        el.querySelector('span:last-child').textContent = 'Connected';
+    } else {
+        el.className = 'connection-status disconnected';
+        el.querySelector('span:last-child').textContent = 'Disconnected';
+    }
+}
+
+function updateSystemBar(rolloutData, versionMetrics) {
+    const stableRate = Math.round(versionMetrics.stableSuccessRate);
+    const canaryRate = Math.round(versionMetrics.canarySuccessRate);
+    const totalReqs = versionMetrics.stableRequestCount + versionMetrics.canaryRequestCount;
+    const canaryWeight = rolloutData.canaryWeight || 0;
+    const phase = rolloutData.phase || 'Unknown';
+
+    const sysStable = document.getElementById('sysStableRate');
+    const sysCanary = document.getElementById('sysCanaryRate');
+    const sysTotal = document.getElementById('sysTotalReqs');
+    const sysPhase = document.getElementById('sysPhase');
+    const sysTraffic = document.getElementById('sysTraffic');
+
+    if (sysStable) {
+        sysStable.textContent = stableRate + '%';
+        sysStable.className = 'system-stat-value ' + rateColorClass(stableRate);
+    }
+    if (sysCanary) {
+        sysCanary.textContent = canaryRate + '%';
+        sysCanary.className = 'system-stat-value ' + rateColorClass(canaryRate);
+    }
+    if (sysTotal) sysTotal.textContent = formatNumber(totalReqs);
+    if (sysPhase) sysPhase.textContent = phase;
+    if (sysTraffic) sysTraffic.textContent = canaryWeight + '%';
+
+    const footer = document.getElementById('footerTimestamp');
+    if (footer) {
+        footer.textContent = 'Last updated: ' + new Date().toLocaleTimeString('en-US', { hour12: false });
+    }
+}
+
 function showDemoMode() {
     document.getElementById('rolloutStatusBadge').innerHTML =
         '<div class="status-badge progressing"><div class="status-dot"></div>Demo Mode</div>';
-    
+
     const deploymentStatusValue = document.getElementById('deploymentStatusValue');
-    if (deploymentStatusValue) {
-        deploymentStatusValue.textContent = 'Demo Mode';
-    }
-    
+    if (deploymentStatusValue) deploymentStatusValue.textContent = 'Demo Mode';
+
     const rolloutMessage = document.getElementById('rolloutMessage');
-    if (rolloutMessage) {
-        rolloutMessage.textContent = 'Connect to a Kubernetes cluster to see live data';
-    }
+    if (rolloutMessage) rolloutMessage.textContent = 'Connect to a Kubernetes cluster to see live data';
 }
 
 function updateRolloutProgress(rolloutData) {
     const phase = rolloutData.phase || 'Unknown';
     const canaryWeight = rolloutData.canaryWeight || 0;
     const currentStepIndex = rolloutData.currentStepIndex;
-    
+
     const badge = document.getElementById('rolloutStatusBadge');
     const statusClass = phase.toLowerCase().replace(/\s+/g, '-');
     badge.innerHTML = '<div class="status-badge ' + statusClass + '">' +
@@ -59,25 +256,17 @@ function updateRolloutProgress(rolloutData) {
         '</div>';
 
     const deploymentStatusValue = document.getElementById('deploymentStatusValue');
-    if (deploymentStatusValue) {
-        deploymentStatusValue.textContent = phase;
-    }
-    
+    if (deploymentStatusValue) deploymentStatusValue.textContent = phase;
+
     const rolloutMessage = document.getElementById('rolloutMessage');
     if (rolloutMessage) {
         let message = rolloutData.message || '';
         if (!message) {
-            if (phase === 'Healthy' && canaryWeight === 100) {
-                message = 'Rollout completed successfully';
-            } else if (phase === 'Progressing') {
-                message = 'Rollout in progress';
-            } else if (phase === 'Paused') {
-                message = 'Rollout paused for analysis';
-            } else if (phase === 'Degraded') {
-                message = 'Rollout degraded - issues detected';
-            } else {
-                message = 'Monitoring deployment';
-            }
+            if (phase === 'Healthy' && canaryWeight === 100) message = 'Rollout completed successfully';
+            else if (phase === 'Progressing') message = 'Rollout in progress';
+            else if (phase === 'Paused') message = 'Rollout paused for analysis';
+            else if (phase === 'Degraded') message = 'Rollout degraded — issues detected';
+            else message = 'Monitoring deployment';
         }
         rolloutMessage.textContent = message;
     }
@@ -90,27 +279,19 @@ function updateRolloutProgress(rolloutData) {
         const weight = parseInt(stage.dataset.weight);
         const stepAttr = stage.dataset.step;
         stage.classList.remove('active', 'completed', 'paused');
-        
-        // Check if this stage matches the current step
+
         let isCurrentStage = false;
         let isPastStage = false;
         if (currentStepIndex !== null && currentStepIndex !== undefined && stepAttr) {
             const steps = stepAttr.split(',').map(s => parseInt(s.trim()));
             isCurrentStage = steps.includes(currentStepIndex);
-            // Check if all steps for this stage are less than current step
             isPastStage = steps.every(s => s < currentStepIndex);
         }
-        
-        // Mark stages as completed if they're in the past
+
         if (isPastStage || weight < canaryWeight) {
             stage.classList.add('completed');
         } else if (isCurrentStage || (weight === canaryWeight && (currentStepIndex === null || currentStepIndex === undefined))) {
-            // Current stage
-            if (phase === 'Paused') {
-                stage.classList.add('paused');
-            } else {
-                stage.classList.add('active');
-            }
+            stage.classList.add(phase === 'Paused' ? 'paused' : 'active');
         }
     });
 }
@@ -118,17 +299,17 @@ function updateRolloutProgress(rolloutData) {
 function updateTrafficDistribution(rolloutData) {
     const stableWeight = rolloutData.stableWeight || 100;
     const canaryWeight = rolloutData.canaryWeight || 0;
-    
+
     const stableSegment = document.getElementById('stableSegment');
     const canarySegment = document.getElementById('canarySegment');
     const stablePercentage = document.getElementById('stablePercentage');
     const canaryPercentage = document.getElementById('canaryPercentage');
-    
+
     stableSegment.style.width = stableWeight + '%';
     canarySegment.style.width = canaryWeight + '%';
     stablePercentage.textContent = stableWeight + '%';
     canaryPercentage.textContent = canaryWeight + '%';
-    
+
     stablePercentage.style.display = stableWeight < 15 ? 'none' : 'flex';
     canaryPercentage.style.display = canaryWeight < 15 ? 'none' : 'flex';
 }
@@ -142,99 +323,90 @@ function updateAIAnalysis(rolloutData, metricsData, versionMetrics) {
         const aiDecisionTitle = document.getElementById('aiDecisionTitle');
         const aiDecisionMessage = document.getElementById('aiDecisionMessage');
         const errorLogContainer = document.getElementById('errorLogContainer');
-        
-        if (!aiIcon || !aiStatusTitle || !aiStatusSubtitle || !aiDecision || !aiDecisionTitle || !aiDecisionMessage || !errorLogContainer) {
-            console.warn('Some AI panel elements not found, skipping update');
-            return;
-        }
-        
+
+        if (!aiIcon || !aiStatusTitle || !aiStatusSubtitle || !aiDecision || !aiDecisionTitle || !aiDecisionMessage || !errorLogContainer) return;
+
         const stableSuccessRate = Math.round(versionMetrics.stableSuccessRate);
         const canarySuccessRate = Math.round(versionMetrics.canarySuccessRate);
         const totalRequests = versionMetrics.stableRequestCount + versionMetrics.canaryRequestCount;
-        
+
         const stableElement = document.getElementById('stableSuccessRate');
         const canaryElement = document.getElementById('canarySuccessRate');
         const requestsElement = document.getElementById('aiRequests');
-        
+
         if (stableElement) stableElement.textContent = stableSuccessRate + '%';
         if (canaryElement) canaryElement.textContent = canarySuccessRate + '%';
-        if (requestsElement) requestsElement.textContent = totalRequests;
-    
-    const analysis = rolloutData.analysis;
+        if (requestsElement) requestsElement.textContent = formatNumber(totalRequests);
 
-    if (analysis && analysis.phase && analysis.phase !== 'Pending' && analysis.phase !== 'NotStarted') {
-        aiIcon.classList.remove('analyzing');
-        aiDecision.classList.remove('success', 'failed');
+        const analysis = rolloutData.analysis;
 
-        if (analysis.phase === 'Running' || analysis.phase === 'Progressing' || analysis.phase === 'InProgress') {
-            aiIcon.classList.add('analyzing');
-            aiIcon.textContent = '🔄';
-            aiStatusTitle.textContent = 'Analysis Running';
-            aiStatusSubtitle.textContent = 'AI is evaluating deployment metrics';
-            aiDecisionTitle.textContent = 'Analyzing...';
-            aiDecisionMessage.textContent = analysis.message || 'The AI agent is currently analyzing canary metrics to determine if the rollout should continue.';
-            errorLogContainer.style.display = 'none';
-        } else if (analysis.phase === 'Successful' || analysis.successful === true) {
-            aiIcon.textContent = '✅';
-            aiStatusTitle.textContent = 'Analysis Successful';
-            aiStatusSubtitle.textContent = 'Metrics within acceptable thresholds';
-            aiDecision.classList.add('success');
-            aiDecisionTitle.textContent = '✓ Rollout Approved';
-            aiDecisionMessage.textContent = analysis.message || 'AI analysis completed successfully. All metrics are healthy. The rollout can proceed to the next stage.';
-            errorLogContainer.style.display = 'none';
-            
-            const canarySegment = document.getElementById('canarySegment');
-            canarySegment.classList.remove('degraded');
-        } else if (analysis.phase === 'Failed' || analysis.phase === 'Degraded' || analysis.successful === false) {
-            aiIcon.textContent = '❌';
-            aiStatusTitle.textContent = 'Analysis Failed';
-            aiStatusSubtitle.textContent = 'Issues detected in deployment';
-            aiDecision.classList.add('failed');
-            aiDecisionTitle.textContent = '✗ Rollback Recommended';
-            aiDecisionMessage.textContent = analysis.message || 'AI analysis detected issues with the canary deployment. Metrics are outside acceptable thresholds. Rollback is recommended.';
-            
-            if (analysis.errorLog) {
-                errorLogContainer.style.display = 'block';
-                document.getElementById('errorLogText').textContent = analysis.errorLog;
-            } else {
+        if (analysis && analysis.phase && analysis.phase !== 'Pending' && analysis.phase !== 'NotStarted') {
+            aiIcon.classList.remove('analyzing');
+            aiDecision.classList.remove('success', 'failed');
+
+            if (['Running', 'Progressing', 'InProgress'].includes(analysis.phase)) {
+                aiIcon.classList.add('analyzing');
+                aiIcon.textContent = '⏳';
+                aiStatusTitle.textContent = 'Analysis Running';
+                aiStatusSubtitle.textContent = 'AI is evaluating deployment metrics';
+                aiDecisionTitle.textContent = 'Analyzing...';
+                aiDecisionMessage.textContent = analysis.message || 'The AI agent is currently analyzing canary metrics to determine if the rollout should continue.';
                 errorLogContainer.style.display = 'none';
-            }
-            
-            const canarySegment = document.getElementById('canarySegment');
-            canarySegment.classList.add('degraded');
-        } else if (analysis.phase === 'Error') {
-            aiIcon.textContent = '⚠️';
-            aiStatusTitle.textContent = 'Analysis Error';
-            aiStatusSubtitle.textContent = 'Error during analysis';
-            aiDecision.classList.add('failed');
-            aiDecisionTitle.textContent = 'Error';
-            aiDecisionMessage.textContent = analysis.message || 'An error occurred during analysis.';
-            
-            if (analysis.errorLog) {
-                errorLogContainer.style.display = 'block';
-                document.getElementById('errorLogText').textContent = analysis.errorLog;
+            } else if (analysis.phase === 'Successful' || analysis.successful === true) {
+                aiIcon.textContent = '✓';
+                aiStatusTitle.textContent = 'Analysis Passed';
+                aiStatusSubtitle.textContent = 'Metrics within acceptable thresholds';
+                aiDecision.classList.add('success');
+                aiDecisionTitle.textContent = 'Rollout Approved';
+                aiDecisionMessage.textContent = analysis.message || 'AI analysis completed successfully. All metrics are healthy.';
+                errorLogContainer.style.display = 'none';
+                document.getElementById('canarySegment').classList.remove('degraded');
+            } else if (['Failed', 'Degraded'].includes(analysis.phase) || analysis.successful === false) {
+                aiIcon.textContent = '✗';
+                aiStatusTitle.textContent = 'Analysis Failed';
+                aiStatusSubtitle.textContent = 'Issues detected in deployment';
+                aiDecision.classList.add('failed');
+                aiDecisionTitle.textContent = 'Rollback Recommended';
+                aiDecisionMessage.textContent = analysis.message || 'AI analysis detected issues. Rollback is recommended.';
+                if (analysis.errorLog) {
+                    errorLogContainer.style.display = 'block';
+                    document.getElementById('errorLogText').textContent = analysis.errorLog;
+                } else {
+                    errorLogContainer.style.display = 'none';
+                }
+                document.getElementById('canarySegment').classList.add('degraded');
+            } else if (analysis.phase === 'Error') {
+                aiIcon.textContent = '⚠';
+                aiStatusTitle.textContent = 'Analysis Error';
+                aiStatusSubtitle.textContent = 'Error during analysis';
+                aiDecision.classList.add('failed');
+                aiDecisionTitle.textContent = 'Error';
+                aiDecisionMessage.textContent = analysis.message || 'An error occurred during analysis.';
+                if (analysis.errorLog) {
+                    errorLogContainer.style.display = 'block';
+                    document.getElementById('errorLogText').textContent = analysis.errorLog;
+                } else {
+                    errorLogContainer.style.display = 'none';
+                }
             } else {
+                aiIcon.textContent = '⊙';
+                aiStatusTitle.textContent = 'Analysis: ' + analysis.phase;
+                aiStatusSubtitle.textContent = 'Current status';
+                aiDecisionTitle.textContent = analysis.phase;
+                aiDecisionMessage.textContent = analysis.message || 'Analysis status: ' + analysis.phase;
                 errorLogContainer.style.display = 'none';
             }
         } else {
-            aiIcon.textContent = '📊';
-            aiStatusTitle.textContent = 'Analysis: ' + analysis.phase;
-            aiStatusSubtitle.textContent = 'Current status';
-            aiDecisionTitle.textContent = analysis.phase;
-            aiDecisionMessage.textContent = analysis.message || 'Analysis status: ' + analysis.phase;
+            aiIcon.classList.remove('analyzing');
+            aiIcon.textContent = '⊙';
+            aiStatusTitle.textContent = 'AI Monitoring';
+            aiStatusSubtitle.textContent = 'Waiting for analysis to start';
+            aiDecision.classList.remove('success', 'failed');
+            aiDecisionTitle.textContent = 'Standby';
+            aiDecisionMessage.textContent = analysis && analysis.message ? analysis.message : 'The AI agent will analyze metrics once the rollout progresses and sufficient data is collected.';
             errorLogContainer.style.display = 'none';
         }
-    } else {
-        aiIcon.classList.remove('analyzing');
-        aiIcon.textContent = '🤖';
-        aiStatusTitle.textContent = 'AI Monitoring';
-        aiStatusSubtitle.textContent = 'Waiting for analysis to start';
-        aiDecision.classList.remove('success', 'failed');
-        aiDecisionTitle.textContent = 'Waiting...';
-        aiDecisionMessage.textContent = analysis && analysis.message ? analysis.message : 'The AI agent will analyze metrics once the rollout progresses and sufficient data is collected.';
-        errorLogContainer.style.display = 'none';
-    }
-    
+
         const graphSuccessRate = canarySuccessRate > 0 ? canarySuccessRate : stableSuccessRate;
         updateSuccessRateGraph(graphSuccessRate);
     } catch (error) {
@@ -245,17 +417,10 @@ function updateAIAnalysis(rolloutData, metricsData, versionMetrics) {
 function toggleErrorLog() {
     const content = document.getElementById('errorLogContent');
     const toggle = document.getElementById('errorLogToggle');
-    
-    if (content.classList.contains('expanded')) {
-        content.classList.remove('expanded');
-        toggle.classList.remove('expanded');
-    } else {
-        content.classList.add('expanded');
-        toggle.classList.add('expanded');
-    }
+    content.classList.toggle('expanded');
+    toggle.classList.toggle('expanded');
 }
 
-// Make toggleErrorLog available globally for onclick handler
 window.toggleErrorLog = toggleErrorLog;
 
 const successRateHistory = [];
@@ -263,22 +428,21 @@ const maxHistoryPoints = 30;
 
 function updateSuccessRateGraph(currentSuccessRate) {
     successRateHistory.push(currentSuccessRate);
-    if (successRateHistory.length > maxHistoryPoints) {
-        successRateHistory.shift();
-    }
-    
+    if (successRateHistory.length > maxHistoryPoints) successRateHistory.shift();
+
     const canvas = document.getElementById('successRateGraph');
     if (!canvas) return;
-    
+
     const ctx = canvas.getContext('2d');
     const width = canvas.width;
     const height = canvas.height;
-    
+
     ctx.clearRect(0, 0, width, height);
-    
+
     if (successRateHistory.length < 2) return;
-    
-    ctx.strokeStyle = '#e5e7eb';
+
+    // Grid lines
+    ctx.strokeStyle = '#e2e8f0';
     ctx.lineWidth = 1;
     for (let i = 0; i <= 4; i++) {
         const y = (height / 4) * i;
@@ -287,29 +451,41 @@ function updateSuccessRateGraph(currentSuccessRate) {
         ctx.lineTo(width, y);
         ctx.stroke();
     }
-    
-    ctx.strokeStyle = currentSuccessRate >= 95 ? '#10b981' : currentSuccessRate >= 90 ? '#f59e0b' : '#ef4444';
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    
+
     const pointSpacing = width / (maxHistoryPoints - 1);
-    
+    const lineColor = currentSuccessRate >= 95 ? '#16a34a' : currentSuccessRate >= 80 ? '#d97706' : '#dc2626';
+    const fillColor = currentSuccessRate >= 95 ? 'rgba(22,163,74,0.1)' : currentSuccessRate >= 80 ? 'rgba(217,119,6,0.1)' : 'rgba(220,38,38,0.1)';
+
+    // Fill area
+    ctx.beginPath();
     successRateHistory.forEach((rate, index) => {
         const x = index * pointSpacing;
         const y = height - (rate / 100) * height;
-        
-        if (index === 0) {
-            ctx.moveTo(x, y);
-        } else {
-            ctx.lineTo(x, y);
-        }
+        if (index === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
     });
-    
+    ctx.lineTo((successRateHistory.length - 1) * pointSpacing, height);
+    ctx.lineTo(0, height);
+    ctx.closePath();
+    ctx.fillStyle = fillColor;
+    ctx.fill();
+
+    // Line
+    ctx.strokeStyle = lineColor;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    successRateHistory.forEach((rate, index) => {
+        const x = index * pointSpacing;
+        const y = height - (rate / 100) * height;
+        if (index === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+    });
     ctx.stroke();
-    
-    ctx.strokeStyle = '#94a3b8';
+
+    // Threshold
+    ctx.strokeStyle = '#cbd5e1';
     ctx.lineWidth = 1;
-    ctx.setLineDash([5, 5]);
+    ctx.setLineDash([4, 4]);
     const thresholdY = height - (95 / 100) * height;
     ctx.beginPath();
     ctx.moveTo(0, thresholdY);
@@ -324,48 +500,33 @@ let previousCanaryRequests = 0;
 function animateRequest(type) {
     const container = document.getElementById('requestVisualization');
     if (!container) return;
-    
+
     const dot = document.createElement('div');
     dot.className = 'request-dot ' + type;
-    dot.style.left = Math.random() * (container.offsetWidth - 18) + 'px';
+    dot.style.left = Math.random() * (container.offsetWidth - 10) + 'px';
     dot.style.bottom = '0px';
-    
+
     container.appendChild(dot);
-    
-    setTimeout(() => {
-        if (dot.parentNode) {
-            dot.parentNode.removeChild(dot);
-        }
-    }, 5000);
+    setTimeout(() => { if (dot.parentNode) dot.parentNode.removeChild(dot); }, 5000);
 }
 
 function visualizeRealRequests(versionMetrics) {
     const stableRequests = versionMetrics.stableRequestCount || 0;
     const canaryRequests = versionMetrics.canaryRequestCount || 0;
     const canarySuccessRate = versionMetrics.canarySuccessRate || 100;
-    
+
     const stableDelta = Math.max(0, stableRequests - previousStableRequests);
     const canaryDelta = Math.max(0, canaryRequests - previousCanaryRequests);
-    
-    // Calculate success and error deltas based on success rate
     const canarySuccessDelta = Math.round((canarySuccessRate / 100) * canaryDelta);
     const canaryErrorDelta = canaryDelta - canarySuccessDelta;
-    
-    // Animate stable requests (blue dots)
-    for (let i = 0; i < Math.min(stableDelta, 20); i++) {
+
+    for (let i = 0; i < Math.min(stableDelta, 20); i++)
         setTimeout(() => animateRequest('stable'), i * 50);
-    }
-    
-    // Animate canary success requests (green dots)
-    for (let i = 0; i < Math.min(canarySuccessDelta, 20); i++) {
+    for (let i = 0; i < Math.min(canarySuccessDelta, 20); i++)
         setTimeout(() => animateRequest('canary-success'), i * 50 + 10);
-    }
-    
-    // Animate canary error requests (red dots)
-    for (let i = 0; i < Math.min(canaryErrorDelta, 20); i++) {
+    for (let i = 0; i < Math.min(canaryErrorDelta, 20); i++)
         setTimeout(() => animateRequest('canary-error'), i * 50 + 20);
-    }
-    
+
     previousStableRequests = stableRequests;
     previousCanaryRequests = canaryRequests;
 }
@@ -373,7 +534,7 @@ function visualizeRealRequests(versionMetrics) {
 function showError(message) {
     const errorContainer = document.getElementById('errorContainer');
     errorContainer.innerHTML = '<div class="error-message">' +
-        '<div class="error-title">Error</div>' +
+        '<div class="error-title">Connection Error</div>' +
         '<div>' + message + '</div>' +
         '</div>';
 }
@@ -382,13 +543,21 @@ function clearError() {
     document.getElementById('errorContainer').innerHTML = '';
 }
 
-// Initialize dashboard when DOM is ready
-if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', () => {
-        updateDashboard();
-        setInterval(updateDashboard, 2000);
-    });
-} else {
+// ── Init ──
+function init() {
+    updateClock();
+    setInterval(updateClock, 1000);
+    setInterval(updateUptime, 1000);
+
     updateDashboard();
     setInterval(updateDashboard, 2000);
+
+    updateTerminals();
+    setInterval(updateTerminals, 3000);
+}
+
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', init);
+} else {
+    init();
 }
