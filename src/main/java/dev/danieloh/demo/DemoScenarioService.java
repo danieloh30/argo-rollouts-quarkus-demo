@@ -1,4 +1,4 @@
-package dev.kevindubois.demo;
+package dev.danieloh.demo;
 
 import jakarta.annotation.PostConstruct;
 import jakarta.enterprise.context.ApplicationScoped;

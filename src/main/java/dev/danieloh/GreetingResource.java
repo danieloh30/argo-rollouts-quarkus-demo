@@ -1,4 +1,4 @@
-package dev.kevindubois;
+package dev.danieloh;
 
 import jakarta.ws.rs.GET;
 import jakarta.ws.rs.Path;

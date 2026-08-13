@@ -1,4 +1,4 @@
-package dev.kevindubois;
+package dev.danieloh;
 
 import jakarta.enterprise.context.ApplicationScoped;
 import org.eclipse.microprofile.config.inject.ConfigProperty;

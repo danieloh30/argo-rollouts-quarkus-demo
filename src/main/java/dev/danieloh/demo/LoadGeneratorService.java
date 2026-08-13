@@ -1,4 +1,4 @@
-package dev.kevindubois.demo;
+package dev.danieloh.demo;
 
 import io.quarkus.runtime.Startup;
 import io.quarkus.scheduler.Scheduled;

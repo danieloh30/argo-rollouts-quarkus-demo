@@ -1,4 +1,4 @@
-package dev.kevindubois.demo.model;
+package dev.danieloh.demo.model;
 
 import java.time.Instant;
 
