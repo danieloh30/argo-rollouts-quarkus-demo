@@ -1,6 +1,6 @@
-package dev.kevindubois.demo;
+package dev.danieloh.demo;
 
-import dev.kevindubois.demo.model.User;
+import dev.danieloh.demo.model.User;
 import jakarta.ws.rs.*;
 import jakarta.ws.rs.core.Response;
 import org.eclipse.microprofile.config.inject.ConfigProperty;

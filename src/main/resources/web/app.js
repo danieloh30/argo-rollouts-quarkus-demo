@@ -95,11 +95,21 @@ function colorizeRolloutOutput(text) {
         .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
         .replace(/^(Name:|Namespace:|Status:|Message:|Strategy:|Images:|Replicas:)/gm, '<span class="t-bold">$1</span>')
         .replace(/(✔\s*Healthy)/g, '<span class="t-green">$1</span>')
+        .replace(/(✔\s*Running)/g, '<span class="t-green">$1</span>')
+        .replace(/(✔\s*Successful)/g, '<span class="t-green">$1</span>')
         .replace(/(◑\s*Progressing)/g, '<span class="t-blue">$1</span>')
+        .replace(/(◑\s*Running)/g, '<span class="t-blue">$1</span>')
         .replace(/(॥\s*Paused)/g, '<span class="t-yellow">$1</span>')
         .replace(/(✖\s*Degraded)/g, '<span class="t-red">$1</span>')
+        .replace(/(✖\s*Failed)/g, '<span class="t-red">$1</span>')
+        .replace(/(✖\s*Error)/g, '<span class="t-red">$1</span>')
         .replace(/(\(stable\))/g, '<span class="t-green">$1</span>')
-        .replace(/(\(canary\))/g, '<span class="t-cyan">$1</span>');
+        .replace(/(\(canary\))/g, '<span class="t-cyan">$1</span>')
+        .replace(/(AnalysisRun)/g, '<span class="t-cyan">$1</span>')
+        .replace(/(ReplicaSet)/g, '<span class="t-blue">$1</span>')
+        .replace(/(Pod\s)/g, '<span class="t-dim">Pod </span>')
+        .replace(/(Metric\s)/g, '<span class="t-cyan">Metric </span>')
+        .replace(/(ready:\d+\/\d+)/g, '<span class="t-dim">$1</span>');
 }
 
 function colorizeAgentLogs(text) {
@@ -553,7 +563,7 @@ function init() {
     setInterval(updateDashboard, 2000);
 
     updateTerminals();
-    setInterval(updateTerminals, 3000);
+    setInterval(updateTerminals, 1000);
 }
 
 if (document.readyState === 'loading') {

@@ -1,4 +1,4 @@
-package dev.kevindubois.demo;
+package dev.danieloh.demo;
 
 import io.quarkus.qute.Template;
 import io.quarkus.qute.TemplateInstance;

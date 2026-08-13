@@ -1,6 +1,6 @@
-package dev.kevindubois.demo;
+package dev.danieloh.demo;
 
-import dev.kevindubois.demo.model.DeploymentStatus;
+import dev.danieloh.demo.model.DeploymentStatus;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.MeterRegistry;

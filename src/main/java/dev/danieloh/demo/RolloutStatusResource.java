@@ -1,8 +1,8 @@
-package dev.kevindubois.demo;
+package dev.danieloh.demo;
 
-import dev.kevindubois.demo.model.AnalysisInfo;
-import dev.kevindubois.demo.model.RolloutInfo;
-import dev.kevindubois.demo.model.VersionMetrics;
+import dev.danieloh.demo.model.AnalysisInfo;
+import dev.danieloh.demo.model.RolloutInfo;
+import dev.danieloh.demo.model.VersionMetrics;
 import io.fabric8.kubernetes.api.model.EnvVar;
 import io.fabric8.kubernetes.api.model.GenericKubernetesResource;
 import io.fabric8.kubernetes.api.model.Pod;

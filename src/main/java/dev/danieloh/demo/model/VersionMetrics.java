@@ -1,4 +1,4 @@
-package dev.kevindubois.demo.model;
+package dev.danieloh.demo.model;
 
 public record VersionMetrics(
     double stableSuccessRate,
