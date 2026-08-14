@@ -13,7 +13,7 @@ const FALLBACK_ROLLOUT_TERMINAL =
     '<span class="t-bold">  Step:          </span>6/6\n' +
     '<span class="t-bold">  SetWeight:     </span>100\n' +
     '<span class="t-bold">  ActualWeight:  </span>100\n' +
-    '<span class="t-bold">Images:          </span><span class="t-blue">ghcr.io/danieloh30/argo-rollouts-quarkus-demo:latest</span> (stable)\n' +
+    '<span class="t-bold">Images:          </span><span class="t-blue">quay.io/danieloh30/argo-rollouts-quarkus-demo:1.0.0</span> (stable)\n' +
     '<span class="t-bold">Replicas:</span>\n' +
     '<span class="t-bold">  Desired:       </span>3\n' +
     '<span class="t-bold">  Current:       </span>3\n' +
