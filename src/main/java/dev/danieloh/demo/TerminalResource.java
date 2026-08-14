@@ -66,7 +66,7 @@ public class TerminalResource {
         try {
             ProcessBuilder pb = new ProcessBuilder(
                     "oc", "logs", "deployment/" + agentDeployment,
-                    "-n", agentNamespace, "--tail=200");
+                    "-n", agentNamespace, "--tail=500");
             pb.redirectErrorStream(true);
             Process process = pb.start();
 

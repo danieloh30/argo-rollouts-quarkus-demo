@@ -157,42 +157,40 @@ function updateDashboard() {
 }
 
 // ── Terminal updates ──
-function updateTerminals() {
-    // Rollout terminal
-    fetch('/api/terminal/rollout')
-        .then(r => r.json())
-        .then(data => {
-            const body = document.getElementById('terminalRolloutBody');
-            if (!body) return;
-            if (data.connected && data.output) {
-                body.innerHTML = colorizeRolloutOutput(data.output);
-            } else {
-                body.innerHTML = FALLBACK_ROLLOUT_TERMINAL;
-            }
-            autoScroll(body);
-        })
-        .catch(() => {
-            const body = document.getElementById('terminalRolloutBody');
-            if (body) body.innerHTML = FALLBACK_ROLLOUT_TERMINAL;
-        });
+let terminalFetchInFlight = false;
 
-    // Agent logs terminal
-    fetch('/api/terminal/agent-logs')
-        .then(r => r.json())
-        .then(data => {
-            const body = document.getElementById('terminalAgentLogsBody');
-            if (!body) return;
-            if (data.connected && data.output) {
-                body.innerHTML = colorizeAgentLogs(data.output);
-            } else {
-                body.innerHTML = FALLBACK_AGENT_LOGS;
+function updateTerminals() {
+    if (terminalFetchInFlight) return;
+    terminalFetchInFlight = true;
+
+    Promise.all([
+        fetch('/api/terminal/rollout').then(r => r.json()).catch(() => null),
+        fetch('/api/terminal/agent-logs').then(r => r.json()).catch(() => null)
+    ]).then(([rolloutData, agentData]) => {
+        const rolloutBody = document.getElementById('terminalRolloutBody');
+        if (rolloutBody) {
+            const wasAtBottom = rolloutBody.scrollHeight - rolloutBody.scrollTop - rolloutBody.clientHeight < 30;
+            if (rolloutData && rolloutData.connected && rolloutData.output) {
+                rolloutBody.innerHTML = colorizeRolloutOutput(rolloutData.output);
+            } else if (!rolloutBody.innerHTML || rolloutBody.innerHTML.includes('FALLBACK')) {
+                rolloutBody.innerHTML = FALLBACK_ROLLOUT_TERMINAL;
             }
-            autoScroll(body);
-        })
-        .catch(() => {
-            const body = document.getElementById('terminalAgentLogsBody');
-            if (body) body.innerHTML = FALLBACK_AGENT_LOGS;
-        });
+            if (wasAtBottom) autoScroll(rolloutBody);
+        }
+
+        const agentBody = document.getElementById('terminalAgentLogsBody');
+        if (agentBody) {
+            const wasAtBottom = agentBody.scrollHeight - agentBody.scrollTop - agentBody.clientHeight < 30;
+            if (agentData && agentData.connected && agentData.output) {
+                agentBody.innerHTML = colorizeAgentLogs(agentData.output);
+            } else if (!agentBody.innerHTML || agentBody.innerHTML.includes('FALLBACK')) {
+                agentBody.innerHTML = FALLBACK_AGENT_LOGS;
+            }
+            if (wasAtBottom) autoScroll(agentBody);
+        }
+    }).finally(() => {
+        terminalFetchInFlight = false;
+    });
 }
 
 function autoScroll(el) {
@@ -563,7 +561,7 @@ function init() {
     setInterval(updateDashboard, 2000);
 
     updateTerminals();
-    setInterval(updateTerminals, 1000);
+    setInterval(updateTerminals, 500);
 }
 
 if (document.readyState === 'loading') {
