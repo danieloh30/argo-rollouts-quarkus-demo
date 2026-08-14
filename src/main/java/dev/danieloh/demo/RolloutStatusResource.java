@@ -81,11 +81,13 @@ public class RolloutStatusResource {
                     100,
                     "Error fetching rollout: " + e.getMessage(),
                     null,
+                    null,
                     null
             );
         }
     }
 
+    @SuppressWarnings("unchecked")
     private RolloutInfo extractRolloutInfo(GenericKubernetesResource rollout) {
         Map<String, Object> status = getStatus(rollout);
 
@@ -97,6 +99,17 @@ public class RolloutStatusResource {
 
         AnalysisInfo analysisInfo = getAnalysisInfo(status);
 
+        String image = null;
+        try {
+            Map<String, Object> spec = (Map<String, Object>) rollout.getAdditionalProperties().get("spec");
+            if (spec != null) {
+                Map<String, Object> template = (Map<String, Object>) spec.get("template");
+                Map<String, Object> templateSpec = (Map<String, Object>) template.get("spec");
+                List<Map<String, Object>> containers = (List<Map<String, Object>>) templateSpec.get("containers");
+                image = containers.get(0).getOrDefault("image", "").toString();
+            }
+        } catch (Exception ignored) {}
+
         return new RolloutInfo(
                 rolloutName,
                 phase,
@@ -104,7 +117,8 @@ public class RolloutStatusResource {
                 stableWeight,
                 message,
                 analysisInfo,
-                currentStepIndex
+                currentStepIndex,
+                image
         );
     }
 
