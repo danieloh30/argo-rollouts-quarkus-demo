@@ -298,6 +298,9 @@ function updateRolloutProgress(rolloutData) {
     const deploymentStatusValue = document.getElementById('deploymentStatusValue');
     if (deploymentStatusValue) deploymentStatusValue.textContent = phase;
 
+    const deployImage = document.getElementById('deployImage');
+    if (deployImage && rolloutData.image) deployImage.textContent = rolloutData.image;
+
     const rolloutMessage = document.getElementById('rolloutMessage');
     if (rolloutMessage) {
         let message = rolloutData.message || '';
