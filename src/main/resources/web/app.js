@@ -639,14 +639,10 @@ function showNotification(title, message, url, type) {
             '<div class="notification-message">' + message + '</div>' +
             '<a href="' + url + '" target="_blank" class="notification-link">' + linkText + ' →</a>' +
         '</div>' +
-        '<button class="notification-close" onclick="this.parentElement.remove()">✕</button>';
+        '<button class="notification-close" onclick="var t=this.parentElement;t.classList.remove(\'visible\');setTimeout(function(){t.remove()},300)">✕</button>';
 
     container.appendChild(toast);
     setTimeout(() => toast.classList.add('visible'), 10);
-    setTimeout(() => {
-        toast.classList.remove('visible');
-        setTimeout(() => toast.remove(), 300);
-    }, 15000);
 }
 
 // ── Init ──
