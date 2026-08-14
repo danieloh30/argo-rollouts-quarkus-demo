@@ -760,6 +760,33 @@ body {
     font-family: 'JetBrains Mono', 'Fira Code', monospace;
 }
 
+.terminal-reload {
+    margin-left: auto;
+    background: none;
+    border: none;
+    color: #94a3b8;
+    font-size: 1.1rem;
+    cursor: pointer;
+    padding: 2px 6px;
+    border-radius: 4px;
+    transition: all 0.2s;
+    line-height: 1;
+
+    &:hover {
+        color: #e2e8f0;
+        background: rgba(255, 255, 255, 0.1);
+    }
+
+    &.spinning {
+        animation: spin 0.6s ease;
+    }
+}
+
+@keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+
 .terminal-body {
     background: #0f172a;
     color: #e2e8f0;

@@ -199,6 +199,36 @@ function autoScroll(el) {
     el.scrollTop = el.scrollHeight;
 }
 
+function refreshTerminal(type) {
+    const btn = event.currentTarget;
+    btn.classList.add('spinning');
+    setTimeout(() => btn.classList.remove('spinning'), 600);
+
+    const endpoint = type === 'rollout' ? '/api/terminal/rollout' : '/api/terminal/agent-logs';
+    const bodyId = type === 'rollout' ? 'terminalRolloutBody' : 'terminalAgentLogsBody';
+    const colorizer = type === 'rollout' ? colorizeRolloutOutput : colorizeAgentLogs;
+    const fallback = type === 'rollout' ? FALLBACK_ROLLOUT_TERMINAL : FALLBACK_AGENT_LOGS;
+
+    fetch(endpoint)
+        .then(r => r.json())
+        .then(data => {
+            const body = document.getElementById(bodyId);
+            if (!body) return;
+            if (data && data.connected && data.output) {
+                body.innerHTML = colorizer(data.output);
+                if (type === 'agent-logs') checkForNotifications(data.output);
+            } else {
+                body.innerHTML = fallback;
+            }
+            autoScroll(body);
+        })
+        .catch(() => {
+            const body = document.getElementById(bodyId);
+            if (body) body.innerHTML = fallback;
+        });
+}
+window.refreshTerminal = refreshTerminal;
+
 function updateConnectionStatus(connected) {
     const el = document.getElementById('connectionStatus');
     if (!el) return;
