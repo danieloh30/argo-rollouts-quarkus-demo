@@ -1,496 +1,119 @@
-# Argo Rollouts AI Plugin - Demo Application
+# Argo Rollouts Quarkus Demo
 
-[![Build and Push](https://github.com/kdubois/argo-rollouts-quarkus-demo/actions/workflows/build.yml/badge.svg)](https://github.com/kdubois/argo-rollouts-quarkus-demo/actions/workflows/build.yml)
-
-A demonstration application showcasing AI-powered progressive delivery with Argo Rollouts. This Quarkus-based application integrates with the Argo Rollouts AI Plugin to enable autonomous canary deployment analysis and automated remediation.
-
-## Quick Links
-
-- **[Deployment Guide](DEPLOYMENT.md)** - Complete installation and setup instructions
-- **[Demo Script](DEMO_SCRIPT.md)** - Conference presentation guide with step-by-step demo flows
-- **[AI Plugin](https://github.com/kdubois/rollouts-plugin-metric-ai)** - Metric provider plugin documentation
-- **[Kubernetes Agent](https://github.com/carlossg/kubernetes-agent)** - Autonomous AI agent documentation
+A Quarkus application that serves as the demo workload for AI-powered progressive delivery with Argo Rollouts on OpenShift. It provides a real-time dashboard, built-in load generation, and configurable bug scenarios for demonstrating autonomous canary analysis and automated remediation.
 
 ## Architecture
 
-The demo application is part of a larger system that brings AI-powered analysis to Kubernetes deployments:
-
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                      Kubernetes Cluster                          │
-│                                                                  │
-│  ┌──────────────────┐                                           │
-│  │   Demo App       │  Quarkus application with:                │
-│  │                  │  - Health endpoints (/q/health)           │
-│  │  Stable: 3 pods  │  - Metrics endpoint (/q/metrics)          │
-│  │  Canary: 1 pod   │  - Dashboard UI (/)                       │
-│  └────────┬─────────┘  - Configurable failure modes             │
-│           │                                                      │
-│           │ Managed by                                           │
-│           ▼                                                      │
-│  ┌──────────────────┐         ┌────────────────────┐           │
-│  │  Argo Rollouts   │────────▶│  Istio Gateway     │           │
-│  │                  │         │  (Traffic Routing) │           │
-│  │  - Canary steps  │         │                    │           │
-│  │  - Analysis runs │         │  20% → 50% → 100%  │           │
-│  └────────┬─────────┘         └────────────────────┘           │
-│           │                                                      │
-│           │ Triggers analysis                                    │
-│           ▼                                                      │
-│  ┌──────────────────┐                                           │
-│  │   AI Plugin      │  Metric provider that:                    │
-│  │                  │  - Collects pod logs                      │
-│  │  (Go binary)     │  - Delegates to Kubernetes Agent          │
-│  └────────┬─────────┘  - Returns PROCEED/ROLLBACK decision      │
-│           │                                                      │
-│           │ A2A Protocol (HTTP/JSON)                             │
-│           ▼                                                      │
-│  ┌──────────────────┐                                           │
-│  │ Kubernetes Agent │  Autonomous AI agent that:                │
-│  │                  │  - Analyzes logs and metrics              │
-│  │  (Quarkus +      │  - Uses LLM (Gemini/OpenAI)               │
-│  │   LangChain4j)   │  - Makes deployment decisions             │
-│  └────────┬─────────┘  - Creates GitHub PRs with fixes          │
-│           │                                                      │
-└───────────┼──────────────────────────────────────────────────────┘
-            │
-            │ Creates PRs on failure
-            ▼
-   ┌────────────────────┐
-   │      GitHub        │  Automated pull requests with:
-   │                    │  - Root cause analysis
-   │  Pull Requests     │  - Proposed code fixes
-   └────────────────────┘  - Testing recommendations
+ Dashboard (Qute)         Terminal Panels           Load Generator
+      |                        |                         |
+      v                        v                         v
+ DashboardResource     TerminalResource          LoadGeneratorService
+                        |           |              (50 req/s to
+                   oc CLI -----> K8s Client         /api/status &
+                   (rollout      (fallback,         /api/user)
+                    status)       in-cluster)
+                                    |
+                         Argo Rollouts CRDs
+                        (Rollout, AnalysisRun)
 ```
 
-## Key Features
+The dashboard polls the backend for rollout status, traffic weights, version metrics, and AI analysis results. Two terminal panels stream live `oc argo rollouts get rollout` output and Digital SRE Agent pod logs, falling back to the Kubernetes Java client when the CLI is unavailable (e.g., inside the cluster). Popup notifications surface GitHub PRs and Issues created by the AI agent.
 
-### Progressive Delivery with AI Analysis
+## Container Images and Scenarios
 
-The application demonstrates how AI can enhance progressive delivery by analyzing canary deployments in real-time. The system automatically decides whether to proceed with or rollback deployments based on intelligent analysis of logs, metrics, and events.
+Pre-built scenario images are pushed by CI on every merge to `main`.
 
-### Autonomous Decision Making
+| Tag | Scenario | `enable.null.pointer.bug` | `enable.memory.leak` | Behavior |
+|-----|----------|---------------------------|----------------------|----------|
+| `v1.stable` | Stable | `false` | `false` | Healthy -- canary promotes to 100% |
+| `v2.nullpointer` | NullPointerException | `true` | `false` | 20% of `/api/user` calls throw NPE; AI agent detects, rolls back, opens fix PR |
+| `v3.memoryleak` | Memory leak | `false` | `true` | Heap grows ~1 MB/request; latency degrades 6x over 90 s; AI agent detects pattern |
 
-Unlike traditional metric-based analysis that relies on static thresholds, the AI agent uses large language models to understand context, identify patterns, and make nuanced decisions about deployment health.
+Registry: `ghcr.io/danieloh30/argo-rollouts-quarkus-demo`
 
-### Automated Remediation
-
-When issues are detected, the Kubernetes Agent automatically creates GitHub pull requests with detailed root cause analysis and proposed fixes, enabling rapid response to deployment problems.
-
-### Configurable Scenarios
-
-The application supports multiple deployment scenarios for demonstration purposes:
-
-- **Happy Path**: Successful deployment with healthy metrics
-- **Failure Mode**: Simulated errors to demonstrate automatic rollback
-- **Custom Scenarios**: Configurable via environment variables
-
-## Technology Stack
-
-- **Quarkus 3.32.1**: Supersonic Subatomic Java Framework
-- **Quarkus Web Bundler**: Zero-config bundling for web assets
-- **Qute Templates**: Type-safe templating for the dashboard
-- **SmallRye Health**: Health check endpoints
-- **Micrometer**: Metrics collection and exposure
-- **Argo Rollouts**: Progressive delivery controller
-
-## CI/CD
-
-The project uses GitHub Actions for automated builds and deployments:
-
-- **Automated Builds**: Every push to `main` triggers a build and pushes container images to GitHub Container Registry (GHCR)
-- **Pull Request Validation**: PRs are built and tested automatically
-- **Container Images**: Available at `ghcr.io/kdubois/argo-rollouts-quarkus-demo`
-- **Dependency Management**: Dependabot automatically creates PRs for dependency updates
-
-Container images are tagged with:
-- `latest` for the main branch
-- Version tags for releases (e.g., `v1.0.0`)
-- SHA-based tags for all builds
-
-## Quick Start
+## Local Development
 
 ### Prerequisites
 
-- Java 21 or later
-- Maven 3.8 or later
-- Docker (for containerization)
-- Kubernetes cluster (for deployment)
+- Java 21+
+- Maven 3.9+ (or use the included `./mvnw` wrapper)
 
-### Running Locally
-
-Start the application in development mode with live coding enabled:
+### Run in Dev Mode
 
 ```bash
 ./mvnw quarkus:dev
 ```
 
-The application will be available at:
-- **Application**: http://localhost:8080
-- **Dashboard**: http://localhost:8080/
-- **Health**: http://localhost:8080/q/health
-- **Metrics**: http://localhost:8080/q/metrics
-- **Dev UI**: http://localhost:8080/q/dev
+The app starts on port 8080:
 
-### Building for Production
+| Endpoint | Path |
+|----------|------|
+| Dashboard | `/` |
+| Status API | `/api/status` |
+| Health | `/q/health` |
+| Prometheus metrics | `/q/metrics` |
+| Quarkus Dev UI | `/q/dev-ui` |
 
-Build the application as a JAR:
+### Configuration
 
-```bash
-./mvnw package
-```
+Key properties in `src/main/resources/application.properties`:
 
-The runnable JAR will be created at `target/quarkus-app/quarkus-run.jar`.
-
-Run the application:
-
-```bash
-java -jar target/quarkus-app/quarkus-run.jar
-```
-
-### Building Docker Images
-
-Build a JVM-based Docker image:
-
-```bash
-docker build -f src/main/docker/Dockerfile.jvm -t quay.io/kdubois/demo-app:latest .
-```
-
-Build a native executable Docker image (requires GraalVM):
-
-```bash
-./mvnw package -Dnative -Dquarkus.native.container-build=true
-docker build -f src/main/docker/Dockerfile.native -t quay.io/kdubois/demo-app:native .
-```
-
-### Using the Makefile
-
-The project includes a Makefile with common tasks:
-
-```bash
-# Show all available targets
-make help
-
-# Build the application
-make build
-
-# Build and push Docker image
-make docker-build docker-push
-
-# Deploy to Kubernetes
-make deploy
-
-# Run in dev mode
-make dev
-
-# Run tests
-make test
-```
-
-## Deployment to Kubernetes
-
-For complete deployment instructions including Argo Rollouts, Istio, and the AI Plugin, see the [Deployment Guide](DEPLOYMENT.md).
-
-Quick deployment using kustomize:
-
-```bash
-# Deploy all resources
-kubectl apply -k kubernetes/
-
-# Watch rollout progress
-kubectl argo rollouts get rollout demo-app -n demo-app --watch
-```
-
-## Configuration
-
-### Environment Variables
-
-| Variable | Default | Description |
+| Property | Default | Description |
 |----------|---------|-------------|
-| `APP_VERSION` | 1.0.0 | Application version displayed in responses |
-| `SCENARIO_MODE` | happy | Deployment scenario (happy, failure) |
-| `QUARKUS_HTTP_PORT` | 8080 | HTTP port for the application |
+| `app.version` | `1.0.0` | Version string shown in responses and dashboard |
+| `scenario.mode` | `success` | `success` or `failure` (affects simulated error rate) |
+| `enable.null.pointer.bug` | `false` | Trigger NPE in `UserResource.getUser` |
+| `enable.memory.leak` | `false` | Allocate 1 MB/request without cleanup |
+| `load.generator.enabled` | `true` | Built-in load generator (disable for local dev) |
+| `load.generator.requests.per.second` | `50` | Request rate for the load generator |
+| `rollout.name` | `quarkus-demo` | Argo Rollout CR name to watch |
+| `rollout.namespace` | `quarkus-demo` | Namespace of the Rollout CR |
 
-### Scenario Modes
+All properties can be overridden with environment variables using the standard Quarkus mapping (dots to underscores, uppercase). For example: `ENABLE_NULL_POINTER_BUG=true`.
 
-**Happy Mode** (default):
-- Normal operation with healthy metrics
-- Success rate above 95%
-- Low error rates
-- Demonstrates successful canary promotion
+## Building Scenario Images
 
-**Failure Mode**:
-- Simulates application errors
-- Elevated error rates (15%+)
-- Demonstrates automatic rollback
-- Triggers GitHub PR creation
-
-Configure the scenario mode via environment variable:
+Build a JVM container image locally:
 
 ```bash
-# In Kubernetes
-kubectl patch rollout demo-app -n demo-app --type merge -p '
-{
-  "spec": {
-    "template": {
-      "spec": {
-        "containers": [{
-          "name": "demo-app",
-          "env": [{
-            "name": "SCENARIO_MODE",
-            "value": "failure"
-          }]
-        }]
-      }
-    }
-  }
-}'
+./mvnw package -DskipTests
+docker build -f src/main/docker/Dockerfile.jvm -t ghcr.io/danieloh30/argo-rollouts-quarkus-demo:v1.stable .
 ```
 
-## Demo Scenarios
-
-### Scenario 1: Successful Deployment
-
-Deploy a new version and watch the AI analyze and promote it:
+To bake in a bug scenario, edit `application.properties` before building (or override at deploy time via env vars):
 
 ```bash
-# Trigger a new rollout
-kubectl argo rollouts set image demo-app -n demo-app \
-  demo-app=quay.io/kdubois/demo-app:2.0.0
-
-# Watch the analysis
-kubectl argo rollouts get rollout demo-app -n demo-app --watch
+# Example: build the NPE scenario image
+sed -i '' 's/enable.null.pointer.bug=false/enable.null.pointer.bug=true/' src/main/resources/application.properties
+./mvnw package -DskipTests
+docker build -f src/main/docker/Dockerfile.jvm -t ghcr.io/danieloh30/argo-rollouts-quarkus-demo:v2.nullpointer .
+git checkout src/main/resources/application.properties
 ```
 
-The AI will analyze the canary at 20% and 50% traffic, then automatically promote to 100% if healthy.
+CI automates this via `.github/workflows/build-scenario-images.yml`, which builds all three scenario images in a matrix and pushes them to GHCR.
 
-### Scenario 2: Failed Deployment with Rollback
+## Integration with Argo Rollouts and the AI Agent
 
-Deploy a buggy version and watch the AI detect and rollback:
+This application is designed to run as an Argo Rollout with a canary strategy. The typical flow:
 
-```bash
-# Deploy with failure mode
-kubectl patch rollout demo-app -n demo-app --type merge -p '
-{
-  "spec": {
-    "template": {
-      "spec": {
-        "containers": [{
-          "name": "demo-app",
-          "env": [
-            {"name": "SCENARIO_MODE", "value": "failure"},
-            {"name": "APP_VERSION", "value": "3.0.0"}
-          ]
-        }]
-      }
-    }
-  }
-}'
+1. **Deploy the stable image** (`v1.stable`) as the initial Rollout.
+2. **Update the image** to a scenario tag (e.g., `v2.nullpointer`) to trigger a canary rollout.
+3. **Argo Rollouts** shifts traffic in steps (e.g., 10% -> 30% -> 60% -> 100%), pausing at each step to run an AnalysisRun.
+4. **The AI metric provider plugin** collects pod logs and metrics from this app's `/q/metrics` and `/api/status` endpoints, then delegates analysis to the Digital SRE Agent.
+5. **The Digital SRE Agent** (a separate Quarkus + LangChain4j application) uses an LLM to evaluate deployment health and returns a `PROCEED` or `ROLLBACK` decision.
+6. On failure, the agent **creates a GitHub PR or Issue** with root cause analysis and a proposed fix. The dashboard shows a popup notification when this happens.
 
-# Watch the rollback
-kubectl argo rollouts get rollout demo-app -n demo-app --watch
-```
+The dashboard visualizes the entire process in real time: traffic distribution between stable and canary, per-version success rates, analysis phase and outcome, and the terminal output from both the rollout controller and the AI agent.
 
-The AI will detect elevated error rates and automatically rollback the deployment. A GitHub PR will be created with the fix.
+## Technology Stack
 
-## Monitoring and Observability
-
-### Health Checks
-
-The application exposes health endpoints:
-
-```bash
-# Liveness probe
-curl http://localhost:8080/q/health/live
-
-# Readiness probe
-curl http://localhost:8080/q/health/ready
-
-# Full health check
-curl http://localhost:8080/q/health
-```
-
-### Metrics
-
-Prometheus-compatible metrics are available:
-
-```bash
-curl http://localhost:8080/q/metrics
-```
-
-Key metrics include:
-- HTTP request counts and durations
-- JVM memory and CPU usage
-- Application-specific business metrics
-
-### Dashboard
-
-The application includes a web dashboard showing:
-- Current deployment status
-- Real-time metrics
-- Rollout progress
-- Analysis results
-
-Access the dashboard at: http://localhost:8080/
-
-## Development
-
-### Project Structure
-
-```
-demo-app/
-├── src/
-│   ├── main/
-│   │   ├── docker/              # Dockerfiles for different builds
-│   │   ├── java/                # Java source code
-│   │   │   └── dev/kevindubois/
-│   │   │       ├── demo/        # Demo-specific code
-│   │   │       │   ├── DashboardResource.java
-│   │   │       │   ├── MetricsResource.java
-│   │   │       │   └── model/   # Data models
-│   │   │       ├── GreetingResource.java
-│   │   │       ├── MyLivenessCheck.java
-│   │   │       └── MyReadinessCheck.java
-│   │   └── resources/
-│   │       ├── application.properties
-│   │       ├── templates/       # Qute templates
-│   │       └── web/             # Web assets (JS, CSS)
-│   └── test/                    # Test code
-├── kubernetes/                  # Kubernetes manifests
-│   ├── namespace.yaml
-│   ├── rollout.yaml            # Argo Rollouts configuration
-│   ├── analysistemplate.yaml   # AI analysis configuration
-│   ├── service-*.yaml          # Kubernetes services
-│   ├── gateway.yaml            # Istio gateway
-│   ├── virtualservice.yaml     # Istio virtual service
-│   └── kustomization.yaml      # Kustomize configuration
-├── Makefile                    # Build automation
-├── pom.xml                     # Maven configuration
-├── README.md                   # This file
-├── DEPLOYMENT.md               # Deployment guide
-└── DEMO_SCRIPT.md              # Conference demo script
-```
-
-### Adding New Features
-
-When adding new features to the demo application:
-
-1. Follow the existing code structure and patterns
-2. Add appropriate health checks if needed
-3. Expose relevant metrics for monitoring
-4. Update the dashboard if the feature affects user experience
-5. Add tests for new functionality
-6. Update documentation
-
-### Code Formatting
-
-Format code using the Maven formatter:
-
-```bash
-./mvnw fmt:format
-```
-
-Or use the Makefile:
-
-```bash
-make format
-```
-
-## Testing
-
-Run the test suite:
-
-```bash
-./mvnw test
-```
-
-Run integration tests:
-
-```bash
-./mvnw verify
-```
-
-Run tests with coverage:
-
-```bash
-./mvnw verify jacoco:report
-```
-
-## Troubleshooting
-
-### Application Won't Start
-
-Check the logs for errors:
-
-```bash
-# Local development
-./mvnw quarkus:dev
-
-# Kubernetes
-kubectl logs -n demo-app -l app=demo-app
-```
-
-Common issues:
-- Port 8080 already in use
-- Missing dependencies
-- Configuration errors
-
-### Health Checks Failing
-
-Verify the health endpoints:
-
-```bash
-curl http://localhost:8080/q/health/live
-curl http://localhost:8080/q/health/ready
-```
-
-Check for:
-- Application startup errors
-- Resource constraints
-- External dependency failures
-
-### Metrics Not Available
-
-Ensure the metrics endpoint is accessible:
-
-```bash
-curl http://localhost:8080/q/metrics
-```
-
-Verify:
-- Micrometer is properly configured
-- Prometheus annotations are present
-- No network policies blocking access
-
-## Contributing
-
-This is a demonstration application for the Argo Rollouts AI Plugin. Contributions are welcome to improve the demo experience.
-
-When contributing:
-1. Follow the existing code style
-2. Add tests for new features
-3. Update documentation
-4. Keep commits focused and well-described
-
-## Related Projects
-
-- **[Argo Rollouts](https://github.com/argoproj/argo-rollouts)**: Progressive delivery for Kubernetes
-- **[rollouts-plugin-metric-ai](https://github.com/kdubois/rollouts-plugin-metric-ai)**: AI-powered metric provider plugin
-- **[kubernetes-agent](https://github.com/carlossg/kubernetes-agent)**: Autonomous Kubernetes debugging agent
-- **[Quarkus](https://quarkus.io)**: Supersonic Subatomic Java Framework
+- Quarkus 3.38.1 (REST, Qute, Scheduler, Kubernetes Client)
+- Micrometer + Prometheus registry
+- SmallRye Health
+- Fabric8 Kubernetes Client (for Argo Rollouts CRD access)
+- Java 21
 
 ## License
 
-This project is licensed under the Apache License 2.0.
-
-## Support
-
-For questions or issues:
-- Check the [Deployment Guide](DEPLOYMENT.md) for setup help
-- Review the [Demo Script](DEMO_SCRIPT.md) for usage examples
-- Open an issue in the GitHub repository
-- Consult the related project documentation
-
----
-
-**Ready to see AI-powered progressive delivery in action?** Follow the [Deployment Guide](DEPLOYMENT.md) to get started!
+Apache License 2.0
