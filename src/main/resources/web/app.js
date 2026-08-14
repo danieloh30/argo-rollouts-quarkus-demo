@@ -2,6 +2,7 @@ let previousSuccessRate = null;
 let previousErrorRate = null;
 const startTime = Date.now();
 let clusterConnected = false;
+let seenNotifications = new Set();
 
 // ── Simulated fallback data for dev mode / no cluster ──
 const FALLBACK_ROLLOUT_TERMINAL =
@@ -172,7 +173,7 @@ function updateTerminals() {
             const wasAtBottom = rolloutBody.scrollHeight - rolloutBody.scrollTop - rolloutBody.clientHeight < 30;
             if (rolloutData && rolloutData.connected && rolloutData.output) {
                 rolloutBody.innerHTML = colorizeRolloutOutput(rolloutData.output);
-            } else if (!rolloutBody.innerHTML || rolloutBody.innerHTML.includes('FALLBACK')) {
+            } else {
                 rolloutBody.innerHTML = FALLBACK_ROLLOUT_TERMINAL;
             }
             if (wasAtBottom) autoScroll(rolloutBody);
@@ -183,7 +184,8 @@ function updateTerminals() {
             const wasAtBottom = agentBody.scrollHeight - agentBody.scrollTop - agentBody.clientHeight < 30;
             if (agentData && agentData.connected && agentData.output) {
                 agentBody.innerHTML = colorizeAgentLogs(agentData.output);
-            } else if (!agentBody.innerHTML || agentBody.innerHTML.includes('FALLBACK')) {
+                checkForNotifications(agentData.output);
+            } else {
                 agentBody.innerHTML = FALLBACK_AGENT_LOGS;
             }
             if (wasAtBottom) autoScroll(agentBody);
@@ -549,6 +551,65 @@ function showError(message) {
 
 function clearError() {
     document.getElementById('errorContainer').innerHTML = '';
+}
+
+// ── Notifications ──
+function checkForNotifications(logText) {
+    const prPattern = /GitHub artifact created:\s*(https:\/\/github\.com\/[^\s]+\/pull\/\d+)/g;
+    const issuePattern = /GitHub issue created:\s*(https:\/\/github\.com\/[^\s]+\/issues\/\d+)/g;
+    const prPattern2 = /"prLink"\s*:\s*"(https:\/\/github\.com\/[^\s"]+\/pull\/\d+)"/g;
+
+    let match;
+    while ((match = prPattern.exec(logText)) !== null) {
+        if (!seenNotifications.has(match[1])) {
+            seenNotifications.add(match[1]);
+            showNotification('Pull Request Created', 'AI Agent auto-generated a fix', match[1], 'pr');
+        }
+    }
+    while ((match = issuePattern.exec(logText)) !== null) {
+        if (!seenNotifications.has(match[1])) {
+            seenNotifications.add(match[1]);
+            showNotification('Issue Created', 'AI Agent reported a production issue', match[1], 'issue');
+        }
+    }
+    while ((match = prPattern2.exec(logText)) !== null) {
+        if (!seenNotifications.has(match[1])) {
+            seenNotifications.add(match[1]);
+            showNotification('Pull Request Created', 'AI Agent auto-generated a fix', match[1], 'pr');
+        }
+    }
+}
+
+function showNotification(title, message, url, type) {
+    let container = document.getElementById('notificationContainer');
+    if (!container) {
+        container = document.createElement('div');
+        container.id = 'notificationContainer';
+        container.className = 'notification-container';
+        document.body.appendChild(container);
+    }
+
+    const toast = document.createElement('div');
+    toast.className = 'notification-toast ' + type;
+    const icon = type === 'pr' ? '🔀' : '🐛';
+    const label = url.match(/\/(pull|issues)\/(\d+)/);
+    const linkText = label ? (type === 'pr' ? 'PR #' + label[2] : 'Issue #' + label[2]) : 'View';
+
+    toast.innerHTML =
+        '<div class="notification-icon">' + icon + '</div>' +
+        '<div class="notification-content">' +
+            '<div class="notification-title">' + title + '</div>' +
+            '<div class="notification-message">' + message + '</div>' +
+            '<a href="' + url + '" target="_blank" class="notification-link">' + linkText + ' →</a>' +
+        '</div>' +
+        '<button class="notification-close" onclick="this.parentElement.remove()">✕</button>';
+
+    container.appendChild(toast);
+    setTimeout(() => toast.classList.add('visible'), 10);
+    setTimeout(() => {
+        toast.classList.remove('visible');
+        setTimeout(() => toast.remove(), 300);
+    }, 15000);
 }
 
 // ── Init ──
