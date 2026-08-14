@@ -116,7 +116,7 @@ function colorizeRolloutOutput(text) {
 function colorizeAgentLogs(text) {
     return text
         .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-        .replace(/^(\d{4}-\d{2}-\d{2}T[\d:.]+Z?)/gm, '<span class="t-dim">$1</span>')
+        .replace(/^(\d{4}-\d{2}-\d{2}[T ][\d:.,]+Z?)/gm, '<span class="t-dim">$1</span>')
         .replace(/\bINFO\b/g, '<span class="t-blue">INFO</span>')
         .replace(/\bWARN\b/g, '<span class="t-yellow">WARN</span>')
         .replace(/\bERROR\b/g, '<span class="t-red">ERROR</span>')
@@ -587,6 +587,7 @@ function clearError() {
 function checkForNotifications(logText) {
     const prPattern = /GitHub artifact created:\s*(https:\/\/github\.com\/[^\s]+\/pull\/\d+)/g;
     const issuePattern = /GitHub issue created:\s*(https:\/\/github\.com\/[^\s]+\/issues\/\d+)/g;
+    const issuePattern2 = /Successfully created issue:\s*(https:\/\/github\.com\/[^\s]+\/issues\/\d+)/g;
     const prPattern2 = /"prLink"\s*:\s*"(https:\/\/github\.com\/[^\s"]+\/pull\/\d+)"/g;
 
     let match;
@@ -597,6 +598,12 @@ function checkForNotifications(logText) {
         }
     }
     while ((match = issuePattern.exec(logText)) !== null) {
+        if (!seenNotifications.has(match[1])) {
+            seenNotifications.add(match[1]);
+            showNotification('Issue Created', 'AI Agent reported a production issue', match[1], 'issue');
+        }
+    }
+    while ((match = issuePattern2.exec(logText)) !== null) {
         if (!seenNotifications.has(match[1])) {
             seenNotifications.add(match[1]);
             showNotification('Issue Created', 'AI Agent reported a production issue', match[1], 'issue');
