@@ -2,7 +2,7 @@ let previousSuccessRate = null;
 let previousErrorRate = null;
 const startTime = Date.now();
 let clusterConnected = false;
-let seenNotifications = new Set();
+let seenNotifications = new Set(JSON.parse(localStorage.getItem('seenNotifications') || '[]'));
 
 // ── Simulated fallback data for dev mode / no cluster ──
 const FALLBACK_ROLLOUT_TERMINAL =
@@ -594,24 +594,28 @@ function checkForNotifications(logText) {
     while ((match = prPattern.exec(logText)) !== null) {
         if (!seenNotifications.has(match[1])) {
             seenNotifications.add(match[1]);
+            localStorage.setItem('seenNotifications', JSON.stringify([...seenNotifications]));
             showNotification('Pull Request Created', 'AI Agent auto-generated a fix', match[1], 'pr');
         }
     }
     while ((match = issuePattern.exec(logText)) !== null) {
         if (!seenNotifications.has(match[1])) {
             seenNotifications.add(match[1]);
+            localStorage.setItem('seenNotifications', JSON.stringify([...seenNotifications]));
             showNotification('Issue Created', 'AI Agent reported a production issue', match[1], 'issue');
         }
     }
     while ((match = issuePattern2.exec(logText)) !== null) {
         if (!seenNotifications.has(match[1])) {
             seenNotifications.add(match[1]);
+            localStorage.setItem('seenNotifications', JSON.stringify([...seenNotifications]));
             showNotification('Issue Created', 'AI Agent reported a production issue', match[1], 'issue');
         }
     }
     while ((match = prPattern2.exec(logText)) !== null) {
         if (!seenNotifications.has(match[1])) {
             seenNotifications.add(match[1]);
+            localStorage.setItem('seenNotifications', JSON.stringify([...seenNotifications]));
             showNotification('Pull Request Created', 'AI Agent auto-generated a fix', match[1], 'pr');
         }
     }
