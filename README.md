@@ -22,7 +22,7 @@ The dashboard polls the backend for rollout status, traffic weights, version met
 
 ## Container Images and Scenarios
 
-Pre-built scenario images are pushed by CI on every merge to `main`.
+Three scenario images are available, each with a specific bug baked in via build-time properties.
 
 | Tag | Scenario | `enable.null.pointer.bug` | `enable.memory.leak` | Behavior |
 |-----|----------|---------------------------|----------------------|----------|
@@ -30,7 +30,7 @@ Pre-built scenario images are pushed by CI on every merge to `main`.
 | `v2.nullpointer` | NullPointerException | `true` | `false` | 20% of `/api/user` calls throw NPE; AI agent detects, rolls back, opens fix PR |
 | `v3.memoryleak` | Memory leak | `false` | `true` | Heap grows ~1 MB/request; latency degrades 6x over 90 s; AI agent detects pattern |
 
-Registry: `ghcr.io/danieloh30/argo-rollouts-quarkus-demo`
+Registry: `quay.io/danieloh30/argo-rollouts-quarkus-demo`
 
 ## Local Development
 
@@ -78,7 +78,7 @@ Build a JVM container image locally:
 
 ```bash
 ./mvnw package -DskipTests
-docker build -f src/main/docker/Dockerfile.jvm -t ghcr.io/danieloh30/argo-rollouts-quarkus-demo:v1.stable .
+docker build -f src/main/docker/Dockerfile.jvm -t quay.io/danieloh30/argo-rollouts-quarkus-demo:v1.stable .
 ```
 
 To bake in a bug scenario, edit `application.properties` before building (or override at deploy time via env vars):
@@ -87,11 +87,15 @@ To bake in a bug scenario, edit `application.properties` before building (or ove
 # Example: build the NPE scenario image
 sed -i '' 's/enable.null.pointer.bug=false/enable.null.pointer.bug=true/' src/main/resources/application.properties
 ./mvnw package -DskipTests
-docker build -f src/main/docker/Dockerfile.jvm -t ghcr.io/danieloh30/argo-rollouts-quarkus-demo:v2.nullpointer .
+docker build -f src/main/docker/Dockerfile.jvm -t quay.io/danieloh30/argo-rollouts-quarkus-demo:v2.nullpointer .
 git checkout src/main/resources/application.properties
 ```
 
-CI automates this via `.github/workflows/build-scenario-images.yml`, which builds all three scenario images in a matrix and pushes them to GHCR.
+Alternatively, use the Quarkus container image extension to build and push in one step:
+
+```bash
+./mvnw package -DskipTests -Dquarkus.container-image.build=true -Dquarkus.container-image.push=true -Dquarkus.container-image.tag=v1.stable
+```
 
 ## Integration with Argo Rollouts and the AI Agent
 
