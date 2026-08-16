@@ -36,7 +36,7 @@ public class MetricsResource {
     DemoScenarioService scenarioService;
 
     @ConfigProperty(name = "app.version", defaultValue = "1.0.0")
-    String appVersion;
+    boolean enableNullPointerBug;
 
     @ConfigProperty(name = "enable.null.pointer.bug", defaultValue = "false")
     boolean enableNullPointerBug;
@@ -121,6 +121,19 @@ public class MetricsResource {
         String versionUpper = appVersion.toUpperCase();
         int length = versionUpper.length();
         
+        // Fix: Add null check to prevent NullPointerException when bug is enabled
+        if (enableNullPointerBug) {
+            try {
+                String nullString = null;
+                if (nullString != null) {
+                    length = nullString.length();  // Safe access with null check
+                } else {
+                    LOG.warn("Null string was null, skipping length calculation to avoid NPE");
+                }
+            } catch (NullPointerException e) {
+                LOG.error("Unexpected NullPointerException in getStatus method", e);
+                throw e;  // Re-throw to maintain the error behavior
+            }
         // Intentionally dereference null to cause NPE (only for scenario 2)
         if (enableNullPointerBug) {
             try {
