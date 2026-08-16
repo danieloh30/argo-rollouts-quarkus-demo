@@ -312,9 +312,9 @@ public class DemoScenarioService {
      * Simulates a downstream service (inventory-service) that gradually degrades,
      * causing elevated latency and eventually request timeouts.
      *
-     * Phase 1 (0-30s): Normal operation, fast responses
-     * Phase 2 (30-60s): Latency increases, warning logs about downstream service
-     * Phase 3 (60s+): Timeouts occur on ~30% of requests, error rate climbs
+     * Phase 1 (0-10s): Normal operation, fast responses
+     * Phase 2 (10-20s): Latency increases, warning logs about downstream service
+     * Phase 3 (20s+): Timeouts occur on ~50% of requests, error rate climbs
      *
      * @return Additional latency in milliseconds
      */
@@ -326,23 +326,23 @@ public class DemoScenarioService {
         long elapsedSeconds = (System.currentTimeMillis() - slowDepStartTime) / 1000;
         long simulatedLatency;
 
-        if (elapsedSeconds < 30) {
+        if (elapsedSeconds < 10) {
             simulatedLatency = 20 + (long) (Math.random() * 30);
-        } else if (elapsedSeconds < 60) {
-            double degradeFactor = (elapsedSeconds - 30) / 30.0;
+        } else if (elapsedSeconds < 20) {
+            double degradeFactor = (elapsedSeconds - 10) / 10.0;
             simulatedLatency = 50 + (long) (degradeFactor * 1500 + Math.random() * 500);
 
-            if (requestNumber % 100 == 0) {
+            if (requestNumber % 20 == 0) {
                 LOG.warn("Downstream inventory-service response time elevated: " + simulatedLatency + "ms. " +
                     "Elapsed: " + elapsedSeconds + "s");
             }
-            if (elapsedSeconds == 45 && requestNumber % 50 == 0) {
+            if (elapsedSeconds >= 15 && requestNumber % 10 == 0) {
                 LOG.error("Downstream dependency degradation: inventory-service p99 latency exceeded 1000ms. " +
                     "Possible database connection pool saturation on downstream side.");
             }
         } else {
             simulatedLatency = 1500 + (long) (Math.random() * 2000);
-            boolean timeout = Math.random() < 0.3;
+            boolean timeout = Math.random() < 0.5;
 
             if (timeout) {
                 long totalTimeouts = slowDepTimeouts.incrementAndGet();
@@ -353,7 +353,7 @@ public class DemoScenarioService {
                     "Downstream service timeout: inventory-service did not respond within 3000ms");
             }
 
-            if (requestNumber % 50 == 0) {
+            if (requestNumber % 10 == 0) {
                 LOG.error("CRITICAL: Downstream inventory-service severely degraded. " +
                     "Response time: " + simulatedLatency + "ms. Timeouts: " + slowDepTimeouts.get() +
                     ". Elapsed: " + elapsedSeconds + "s. Service mesh circuit breaker threshold approaching.");
