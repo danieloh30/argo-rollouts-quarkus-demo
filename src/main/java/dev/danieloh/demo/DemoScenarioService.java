@@ -32,6 +32,9 @@ public class DemoScenarioService {
     @ConfigProperty(name = "enable.cpu.spike", defaultValue = "false")
     boolean cpuSpikeEnabled;
 
+    @ConfigProperty(name = "enable.slow.dependency", defaultValue = "false")
+    boolean slowDependencyEnabled;
+
     // Memory leak simulation
     private List<byte[]> memoryLeakList;
     private long memoryLeakStartTime;
@@ -42,6 +45,10 @@ public class DemoScenarioService {
 
     // Request counter for CPU spike
     private AtomicLong requestCount = new AtomicLong(0);
+
+    // Slow dependency simulation
+    private long slowDepStartTime;
+    private AtomicLong slowDepTimeouts = new AtomicLong(0);
 
     @PostConstruct
     void init() {
@@ -60,6 +67,11 @@ public class DemoScenarioService {
 
         if (cpuSpikeEnabled) {
             LOG.warn("CPU SPIKE SCENARIO ENABLED - This will cause periodic CPU spikes");
+        }
+
+        if (slowDependencyEnabled) {
+            slowDepStartTime = System.currentTimeMillis();
+            LOG.warn("SLOW DEPENDENCY SCENARIO ENABLED - Downstream service will gradually degrade");
         }
 
         LOG.info("DemoScenarioService initialized with mode: " + scenarioMode);
@@ -82,11 +94,12 @@ public class DemoScenarioService {
             long memoryLeakLatency = executeMemoryLeakScenario(currentRequest);
             executeConnectionLeakScenario();
             executeCpuSpikeScenario(currentRequest);
+            long slowDepLatency = executeSlowDependencyScenario(currentRequest);
 
             // Then execute the configured scenario mode
             ScenarioResult result = executeScenarioMode();
             isSuccess = result.isSuccess();
-            latencyMs = result.getLatencyMs() + memoryLeakLatency;
+            latencyMs = result.getLatencyMs() + memoryLeakLatency + slowDepLatency;
 
         } catch (Exception e) {
             isSuccess = false;
@@ -288,6 +301,74 @@ public class DemoScenarioService {
 
     public boolean isCpuSpikeEnabled() {
         return cpuSpikeEnabled;
+    }
+
+    public boolean isSlowDependencyEnabled() {
+        return slowDependencyEnabled;
+    }
+
+    /**
+     * BUG SCENARIO 4: Slow Downstream Dependency
+     * Simulates a downstream service (inventory-service) that gradually degrades,
+     * causing elevated latency and eventually request timeouts.
+     *
+     * Phase 1 (0-30s): Normal operation, fast responses
+     * Phase 2 (30-60s): Latency increases, warning logs about downstream service
+     * Phase 3 (60s+): Timeouts occur on ~30% of requests, error rate climbs
+     *
+     * @return Additional latency in milliseconds
+     */
+    private long executeSlowDependencyScenario(long requestNumber) {
+        if (!slowDependencyEnabled) {
+            return 0;
+        }
+
+        long elapsedSeconds = (System.currentTimeMillis() - slowDepStartTime) / 1000;
+        long simulatedLatency;
+
+        if (elapsedSeconds < 30) {
+            simulatedLatency = 20 + (long) (Math.random() * 30);
+        } else if (elapsedSeconds < 60) {
+            double degradeFactor = (elapsedSeconds - 30) / 30.0;
+            simulatedLatency = 50 + (long) (degradeFactor * 1500 + Math.random() * 500);
+
+            if (requestNumber % 100 == 0) {
+                LOG.warn("Downstream inventory-service response time elevated: " + simulatedLatency + "ms. " +
+                    "Elapsed: " + elapsedSeconds + "s");
+            }
+            if (elapsedSeconds == 45 && requestNumber % 50 == 0) {
+                LOG.error("Downstream dependency degradation: inventory-service p99 latency exceeded 1000ms. " +
+                    "Possible database connection pool saturation on downstream side.");
+            }
+        } else {
+            simulatedLatency = 1500 + (long) (Math.random() * 2000);
+            boolean timeout = Math.random() < 0.3;
+
+            if (timeout) {
+                long totalTimeouts = slowDepTimeouts.incrementAndGet();
+                LOG.error("TIMEOUT: Call to inventory-service timed out after 3000ms. " +
+                    "Total timeouts: " + totalTimeouts + ". Elapsed: " + elapsedSeconds + "s. " +
+                    "Downstream service is unresponsive — circuit breaker should activate.");
+                throw new RuntimeException(
+                    "Downstream service timeout: inventory-service did not respond within 3000ms");
+            }
+
+            if (requestNumber % 50 == 0) {
+                LOG.error("CRITICAL: Downstream inventory-service severely degraded. " +
+                    "Response time: " + simulatedLatency + "ms. Timeouts: " + slowDepTimeouts.get() +
+                    ". Elapsed: " + elapsedSeconds + "s. Service mesh circuit breaker threshold approaching.");
+            }
+        }
+
+        // Cap actual sleep to avoid thread exhaustion from the load generator
+        long actualSleep = Math.min(simulatedLatency, 200);
+        try {
+            Thread.sleep(actualSleep);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+
+        return simulatedLatency;
     }
 
     /**

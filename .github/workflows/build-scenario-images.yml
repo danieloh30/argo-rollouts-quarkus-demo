@@ -26,6 +26,10 @@ jobs:
             tag: v3.memoryleak
             null_pointer: "false"
             memory_leak: "true"
+          - name: slow-dependency
+            tag: v4.slowdependency
+            null_pointer: "false"
+            memory_leak: "false"
 
     steps:
       - name: Checkout code
@@ -45,6 +49,10 @@ jobs:
           sed -i "s/enable.memory.leak=.*/enable.memory.leak=${{ matrix.scenario.memory_leak }}/" src/main/resources/application.properties
           sed -i "s/enable.connection.leak=.*/enable.connection.leak=false/" src/main/resources/application.properties
           sed -i "s/enable.cpu.spike=.*/enable.cpu.spike=false/" src/main/resources/application.properties
+          sed -i "s/enable.slow.dependency=.*/enable.slow.dependency=false/" src/main/resources/application.properties
+          if [ "${{ matrix.scenario.name }}" = "slow-dependency" ]; then
+            sed -i "s/enable.slow.dependency=false/enable.slow.dependency=true/" src/main/resources/application.properties
+          fi
           sed -i "s/load.generator.enabled=.*/load.generator.enabled=true/" src/main/resources/application.properties
 
       - name: Build with Maven
