@@ -22,13 +22,14 @@ The dashboard polls the backend for rollout status, traffic weights, version met
 
 ## Container Images and Scenarios
 
-Three scenario images are available, each with a specific bug baked in via build-time properties.
+Four scenario images are available, each with a specific bug baked in via build-time properties.
 
-| Tag | Scenario | `enable.null.pointer.bug` | `enable.memory.leak` | Behavior |
-|-----|----------|---------------------------|----------------------|----------|
-| `v1.stable` | Stable | `false` | `false` | Healthy -- canary promotes to 100% |
-| `v2.nullpointer` | NullPointerException | `true` | `false` | 20% of `/api/user` calls throw NPE; AI agent detects, rolls back, opens fix PR |
-| `v3.memoryleak` | Memory leak | `false` | `true` | Heap grows ~1 MB/request; latency degrades 6x over 90 s; AI agent detects pattern |
+| Tag | Scenario | Bug Flag | Behavior |
+|-----|----------|----------|----------|
+| `v1.stable` | Stable | none | Healthy -- canary promotes to 100% |
+| `v2.nullpointer` | NullPointerException | `enable.null.pointer.bug` | 20% of `/api/user` calls throw NPE; AI agent rolls back, creates **PR** with fix |
+| `v3.memoryleak` | Memory leak | `enable.memory.leak` | Heap grows ~1 MB/request; latency degrades 6x over 90 s; AI agent rolls back, creates **Issue** |
+| `v4.slowdependency` | Slow downstream | `enable.slow.dependency` | Downstream inventory-service degrades over 60 s, then 30% timeout rate; AI agent rolls back, creates **Issue** |
 
 Registry: `quay.io/danieloh30/argo-rollouts-quarkus-demo`
 
@@ -65,6 +66,7 @@ Key properties in `src/main/resources/application.properties`:
 | `scenario.mode` | `success` | `success` or `failure` (affects simulated error rate) |
 | `enable.null.pointer.bug` | `false` | Trigger NPE in `UserResource.getUser` |
 | `enable.memory.leak` | `false` | Allocate 1 MB/request without cleanup |
+| `enable.slow.dependency` | `false` | Simulate downstream service degradation and timeouts |
 | `load.generator.enabled` | `true` | Built-in load generator (disable for local dev) |
 | `load.generator.requests.per.second` | `50` | Request rate for the load generator |
 | `rollout.name` | `quarkus-demo` | Argo Rollout CR name to watch |
