@@ -1,17 +1,17 @@
 # Container-Based Test Scenarios for Argo Rollouts
 
-This document explains the simplified container-based approach for demonstrating AI-powered progressive delivery with Argo Rollouts.
+This document explains the container-based approach for demonstrating AI-powered progressive delivery with Argo Rollouts.
 
 ## Table of Contents
 
 - [Overview](#overview)
 - [Architecture](#architecture)
-- [The Three Scenarios](#the-three-scenarios)
+- [The Four Scenarios](#the-four-scenarios)
   - [Scenario 1: Stable Deployment (Happy Path)](#scenario-1-stable-deployment-happy-path)
   - [Scenario 2: NullPointerException Bug (Fixable)](#scenario-2-nullpointerexception-bug-fixable)
   - [Scenario 3: Memory Leak (Non-Fixable)](#scenario-3-memory-leak-non-fixable)
+  - [Scenario 4: Slow Downstream Dependency (Non-Fixable)](#scenario-4-slow-downstream-dependency-non-fixable)
 - [Quick Start](#quick-start)
-- [GitOps Workflow](#gitops-workflow)
 - [Demo Flow](#demo-flow)
 - [Building Scenario Images](#building-scenario-images)
 - [Troubleshooting](#troubleshooting)
@@ -22,198 +22,132 @@ This document explains the simplified container-based approach for demonstrating
 
 The container-based approach simplifies progressive delivery demonstrations by:
 
-- **Built-in Load Generator**: Each container generates 50 requests/second automatically, eliminating the need for external load testing tools
-- **Pre-built Scenario Images**: Three distinct container images with different behaviors (stable, null pointer bug, memory leak)
-- **Automated CI/CD**: GitHub Actions workflow builds all scenario images on every push
-- **GitOps-Ready**: Kustomize overlays enable easy deployment switching via git commits
-- **AI-Powered Analysis**: Kubernetes agent analyzes logs and metrics to make intelligent decisions
-
-### Why Container-Based?
-
-1. **Easy Demos**: No need to manually trigger bugs or generate load
-2. **Triggers Argo Rollouts**: Image changes automatically start progressive delivery
-3. **Realistic Scenarios**: Simulates real production issues (NPE, memory leaks)
-4. **Fast Analysis**: Built-in load ensures AI has enough data within 40 seconds
+- **Built-in Load Generator**: Each container generates 50 requests/second automatically
+- **Pre-built Scenario Images**: Four distinct container images with different behaviors
+- **GitOps-Ready**: Change the image tag in `rollout.yaml`, commit, and push
+- **AI-Powered Analysis**: Kubernetes agent analyzes logs and metrics to make promote/rollback decisions
+- **Automated Remediation**: Agent creates GitHub PRs for code bugs and Issues for operational problems
 
 ---
 
 ## Architecture
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                         GitOps Repository                        │
-│  progressive-delivery/workloads/quarkus-rollouts-demo/          │
-│    ├── base/                  (Common resources)                │
-│    └── overlays/                                                │
-│        ├── scenario-1-stable/        (v1.stable)                │
-│        ├── scenario-2-null-pointer/  (v2.nullpointer)           │
-│        └── scenario-3-memory-leak/   (v3.memoryleak)            │
-└─────────────────────────────────────────────────────────────────┘
-                              ↓
-                    ArgoCD Auto-Sync
-                              ↓
-┌─────────────────────────────────────────────────────────────────┐
-│                      Argo Rollouts Controller                    │
-│  Detects image change → Starts progressive delivery              │
-│    Step 1: 10% canary traffic (10s)                             │
-│    Step 2: 10% canary + AI analysis (40s) ← DECISION POINT      │
-│    Step 3: 60% canary (20s)                                     │
-│    Step 4: 100% canary (10s)                                    │
-└─────────────────────────────────────────────────────────────────┘
-                              ↓
-                    AI Analysis (40s)
-                              ↓
-┌─────────────────────────────────────────────────────────────────┐
-│                      Kubernetes Agent                            │
-│  1. Fetches logs from stable & canary pods                      │
-│  2. Analyzes with AI (GPT-4o or local LLM)                      │
-│  3. Decides: PASS, FAIL, or INCONCLUSIVE                        │
-│  4. Creates PR (fixable) or Issue (non-fixable)                 │
-└─────────────────────────────────────────────────────────────────┘
-                              ↓
-                    Rollout Decision
-                              ↓
-        ┌─────────────────────┴─────────────────────┐
-        ↓                                           ↓
-   ✅ PASS                                      ❌ FAIL
-   Continue rollout                            Abort rollout
-   (Scenario 1)                                (Scenarios 2 & 3)
++--------------------------+          +-------------------------------------------+
+|   progressive-delivery   |   sync   |   OpenShift Cluster                       |
+|   (GitOps repo)          +--------->|                                           |
+|                          |          |   Argo Rollouts Controller                |
+|  rollout.yaml:           |          |     10% canary (10s)                      |
+|    image: v2.nullpointer |          |     10% canary + AI analysis (40s)        |
+|                          |          |     60% canary (20s)                      |
+|                          |          |     100% canary (10s)                     |
++--------------------------+          +-------------------------------------------+
+                                                      |
+                                              AI Analysis
+                                                      |
+                                      +---------------+---------------+
+                                      |                               |
+                                 PASS (promote)                 FAIL (rollback)
+                                 (Scenario 1)                   (Scenarios 2-4)
+                                                                      |
+                                                        +-------------+-------------+
+                                                        |                           |
+                                                   Code Bug                  Operational
+                                                   -> PR                     -> Issue
+                                                   (Scenario 2)              (Scenarios 3, 4)
 ```
 
 ### Components
 
-1. **Quarkus Application** ([src/main/java/dev/kevindubois/demo/](src/main/java/dev/kevindubois/demo/))
+1. **Quarkus Application** (`src/main/java/dev/danieloh/demo/`)
    - `LoadGeneratorService.java`: Built-in load generator (50 req/sec)
-   - `DemoScenarioService.java`: Simulates bugs (NPE, memory leak)
+   - `DemoScenarioService.java`: Simulates bugs (NPE, memory leak, slow dependency)
    - `UserResource.java`: REST endpoint with optional NPE bug
 
-2. **Container Images** (Built by [GitHub Actions](.github/workflows/build-scenario-images.yml))
-   - `v1.stable`: Healthy application
-   - `v2.nullpointer`: NullPointerException bug (20% of requests)
-   - `v3.memoryleak`: Memory leak (1MB per request)
+2. **Container Images** (hosted on `quay.io/danieloh30/argo-rollouts-quarkus-demo`)
+   - `v1.stable` -- Healthy application
+   - `v2.nullpointer` -- NullPointerException bug (20% of requests)
+   - `v3.memoryleak` -- Memory leak (1MB per request)
+   - `v4.slowdependency` -- Downstream service timeout (50% after 20s)
 
-3. **Kustomize Overlays** ([progressive-delivery/workloads/quarkus-rollouts-demo/](../progressive-delivery/workloads/quarkus-rollouts-demo/))
-   - `base/`: Common resources (rollout, services, analysis template)
-   - `overlays/scenario-X/`: Scenario-specific image tags
-
-4. **AI Analysis** ([kubernetes-agent/](../kubernetes-agent/))
+3. **Kubernetes Agent** (`quay.io/danieloh30/kubernetes-agent`)
    - Analyzes logs and metrics during canary deployment
-   - Creates GitHub PRs for fixable issues
-   - Creates GitHub Issues for non-fixable issues
+   - Creates GitHub PRs for fixable code issues
+   - Creates GitHub Issues for operational problems
+   - Dynamic issue titles and labels based on root cause analysis
 
 ---
 
-## The Three Scenarios
+## The Four Scenarios
 
 ### Scenario 1: Stable Deployment (Happy Path)
 
-**Image**: `quay.io/kevindubois/argo-rollouts-quarkus-demo:v1.stable`
+**Image**: `quay.io/danieloh30/argo-rollouts-quarkus-demo:v1.stable`
 
-**Behavior**:
-- ✅ 99% success rate
-- ✅ Low latency (10-50ms)
-- ✅ No errors in logs
-- ✅ Stable memory usage
+| Metric | Value |
+|--------|-------|
+| Success rate | 99% |
+| Latency | 10-50ms |
+| Errors | None |
+| Memory | Stable |
 
-**AI Analysis Result**: ✅ **PASS**
-
-**Timeline**:
-- 0:00 - Rollout starts, 10% traffic to canary
-- 0:10 - AI analysis begins
-- 0:50 - AI analysis completes: "No issues detected"
-- 0:50 - Rollout continues to 60%
-- 1:10 - Rollout continues to 100%
-- 1:20 - **Rollout complete** ✅
-
-**Expected Outcome**: Successful rollout, no GitHub activity
-
-**Demo Use Case**: Show that AI correctly identifies healthy deployments
+**AI Decision**: PASS -- rollout completes successfully, no GitHub activity.
 
 ---
 
 ### Scenario 2: NullPointerException Bug (Fixable)
 
-**Image**: `quay.io/kevindubois/argo-rollouts-quarkus-demo:v2.nullpointer`
+**Image**: `quay.io/danieloh30/argo-rollouts-quarkus-demo:v2.nullpointer`
 
-**Behavior**:
-- ❌ 20% of requests fail with NullPointerException
-- ❌ Clear stack traces in logs pointing to line 39 in `UserResource.java`
-- ⚠️ 80% success rate (below threshold)
-- ✅ Normal latency for successful requests
+| Metric | Value |
+|--------|-------|
+| Success rate | ~80% |
+| Error type | `NullPointerException` at `UserResource.java` |
+| Failure rate | 20% of requests |
+| Root cause | Missing null check on `user` before calling `user.getName()` |
 
-**Bug Details**:
-```java
-// UserResource.java:39
-User user = findUser(userId);
-String userName = user.getName(); // NPE when user is null!
-```
+**AI Decision**: FAIL -- rollout aborted, **Pull Request** created with code fix.
 
-**AI Analysis Result**: ❌ **FAIL** (Fixable)
-
-**Timeline**:
-- 0:00 - Rollout starts, 10% traffic to canary
-- 0:10 - AI analysis begins
-- 0:15 - First NPE errors appear in canary logs
-- 0:50 - AI analysis completes: "NullPointerException detected"
-- 0:50 - **Rollout aborted** ❌
-- 0:55 - AI creates **Pull Request** with fix
-
-**GitHub Activity**:
-- **Pull Request Created**: "Fix NullPointerException in UserResource"
-- Contains: Root cause analysis, code fix, testing recommendations
-- Branch: `fix/npe-user-resource-{timestamp}`
-
-**Expected Outcome**: Rollout aborted, PR created with fix
-
-**Demo Use Case**: Show AI detecting bugs with clear stack traces and creating automated fixes
+The agent detects the NPE in canary logs, identifies it as a code bug (clear stack trace pointing to a specific line), and creates a PR with the fix on a new branch.
 
 ---
 
 ### Scenario 3: Memory Leak (Non-Fixable)
 
-**Image**: `quay.io/kevindubois/argo-rollouts-quarkus-demo:v3.memoryleak`
+**Image**: `quay.io/danieloh30/argo-rollouts-quarkus-demo:v3.memoryleak`
 
-**Behavior**:
-- ⚠️ Gradual performance degradation
-- ⚠️ Latency increases 6x over 90 seconds (10ms → 300ms)
-- ⚠️ Heap memory grows linearly (150MB → 250MB)
-- ⚠️ Warning logs but **no stack traces**
-- ❌ Root cause not obvious from logs alone
+| Metric | Value |
+|--------|-------|
+| Success rate | Degrades over time |
+| Latency | Increases 6x over 90s (10ms to 300ms) |
+| Heap growth | ~1MB per request, never released |
+| Log pattern | Performance degradation warnings, no stack traces |
 
-**Bug Details**:
-```java
-// DemoScenarioService.java:150
-byte[] leak = new byte[1024 * 1024]; // 1MB per request
-memoryLeakList.add(leak); // Never released!
-```
+**AI Decision**: FAIL -- rollout aborted, **GitHub Issue** created with root cause analysis.
 
-**Log Examples**:
-```
-WARN  Performance degradation detected: Response times increasing. Heap usage: 50MB
-ERROR CRITICAL: Severe performance degradation. Response times 3x baseline. Heap usage: 100MB
-ERROR CRITICAL: Application struggling. Response times 6x baseline. Heap usage: 150MB
-```
+The agent detects increasing latency and memory pressure warnings. Since there's no clear stack trace pointing to fixable code, it classifies this as an operational issue and creates an Issue instead of a PR.
 
-**AI Analysis Result**: ❌ **FAIL** (Non-Fixable)
+---
 
-**Timeline**:
-- 0:00 - Rollout starts, 10% traffic to canary
-- 0:10 - AI analysis begins
-- 0:20 - Latency starts increasing (50ms)
-- 0:30 - Warning logs appear (50MB leaked)
-- 0:40 - Latency at 150ms (100MB leaked)
-- 0:50 - AI analysis completes: "Memory leak suspected"
-- 0:50 - **Rollout aborted** ❌
-- 0:55 - AI creates **GitHub Issue**
+### Scenario 4: Slow Downstream Dependency (Non-Fixable)
 
-**GitHub Activity**:
-- **Issue Created**: "Memory Leak Detected - Requires Investigation"
-- Contains: Symptoms, log analysis, heap dump recommendation
-- Labels: `bug`, `performance`, `requires-investigation`
+**Image**: `quay.io/danieloh30/argo-rollouts-quarkus-demo:v4.slowdependency`
 
-**Expected Outcome**: Rollout aborted, Issue created (no automated fix)
+| Phase | Timing | Behavior |
+|-------|--------|----------|
+| Normal | 0-10s | Fast responses (20-50ms) |
+| Degradation | 10-20s | Latency climbs, warning logs about downstream service |
+| Timeout | 20s+ | 50% of requests timeout with `RuntimeException: Downstream service timeout: inventory-service did not respond within 3000ms` |
 
-**Demo Use Case**: Show AI detecting complex issues without obvious stack traces and escalating to humans
+| Metric | Value |
+|--------|-------|
+| Error type | `RuntimeException` (downstream timeout) |
+| Timeout rate | 50% after 20s |
+| Log keywords | `TIMEOUT`, `circuit breaker`, `inventory-service`, `unresponsive` |
+
+**AI Decision**: FAIL -- rollout aborted, **GitHub Issue** created with root cause analysis.
+
+The agent detects timeout errors and circuit breaker warnings in canary logs, classifies it as an operational/infrastructure issue (downstream dependency problem, not a code bug), and creates an Issue with labels like `bug`, `downstream-timeout`, `canary-analysis`.
 
 ---
 
@@ -221,296 +155,129 @@ ERROR CRITICAL: Application struggling. Response times 6x baseline. Heap usage: 
 
 ### Prerequisites
 
-- OpenShift cluster with Argo Rollouts and ArgoCD installed
-- Kubernetes agent deployed ([kubernetes-agent/deployment/](../kubernetes-agent/deployment/))
+- OpenShift cluster with Argo Rollouts and Argo CD installed
+- Kubernetes agent deployed in `openshift-gitops` namespace
 - GitHub token configured for PR/Issue creation
 
 ### Deploy a Scenario
 
-**Scenario 1 (Stable)**:
-```bash
-kubectl apply -k progressive-delivery/workloads/quarkus-rollouts-demo/overlays/scenario-1-stable/
+Edit the image tag in `workloads/quarkus-rollouts-demo/base/rollout.yaml`:
+
+```yaml
+containers:
+- name: quarkus-demo
+  image: quay.io/danieloh30/argo-rollouts-quarkus-demo:v2.nullpointer
 ```
 
-**Scenario 2 (NullPointerException)**:
-```bash
-kubectl apply -k progressive-delivery/workloads/quarkus-rollouts-demo/overlays/scenario-2-null-pointer/
-```
+Commit and push:
 
-**Scenario 3 (Memory Leak)**:
 ```bash
-kubectl apply -k progressive-delivery/workloads/quarkus-rollouts-demo/overlays/scenario-3-memory-leak/
+git add workloads/quarkus-rollouts-demo/base/rollout.yaml
+git commit -m "Switch to v2.nullpointer scenario"
+git push
 ```
 
 ### Watch the Rollout
 
 ```bash
-# Watch rollout progress
-kubectl argo rollouts get rollout quarkus-demo -n quarkus-demo --watch
+oc argo rollouts get rollout quarkus-demo -n quarkus-demo --watch
 
-# Check AI analysis
-kubectl get analysisrun -n quarkus-demo
+oc get analysisrun -n quarkus-demo
 
-# View analysis details
-kubectl describe analysisrun <analysis-run-name> -n quarkus-demo
-
-# Check canary logs
-kubectl logs -n quarkus-demo -l app=quarkus-demo,role=canary --tail=50 -f
-
-# Check stable logs
-kubectl logs -n quarkus-demo -l app=quarkus-demo,role=stable --tail=50 -f
+oc logs -n openshift-gitops -l app=kubernetes-agent --tail=30
 ```
-
-### Access the Application
-
-```bash
-# Get the route URL
-oc get route quarkus-demo -n quarkus-demo
-
-# Test the endpoint
-curl https://quarkus-demo-quarkus-demo.apps.your-cluster.com/api/status
-```
-
----
-
-## GitOps Workflow
-
-The GitOps workflow enables triggering rollouts via git commits:
-
-### 1. Edit Kustomize Overlay
-
-Choose the scenario you want to deploy:
-
-```bash
-# Edit the rollout patch to change the image
-vim progressive-delivery/workloads/quarkus-rollouts-demo/overlays/scenario-2-null-pointer/rollout-patch.yaml
-```
-
-Example change:
-```yaml
-spec:
-  template:
-    spec:
-      containers:
-      - name: quarkus-demo
-        image: quay.io/kevindubois/argo-rollouts-quarkus-demo:v2.nullpointer  # Changed from v1.stable
-```
-
-### 2. Commit and Push
-
-```bash
-git add progressive-delivery/workloads/quarkus-rollouts-demo/overlays/scenario-2-null-pointer/
-git commit -m "Deploy scenario 2: NullPointerException bug"
-git push origin main
-```
-
-### 3. ArgoCD Auto-Sync
-
-ArgoCD detects the change and syncs automatically (if auto-sync is enabled):
-
-```bash
-# Check ArgoCD application status
-argocd app get quarkus-rollouts-demo
-
-# Manual sync if needed
-argocd app sync quarkus-rollouts-demo
-```
-
-### 4. Argo Rollouts Triggers
-
-Argo Rollouts detects the image change and starts progressive delivery:
-
-```bash
-# Watch the rollout
-kubectl argo rollouts get rollout quarkus-demo -n quarkus-demo --watch
-```
-
-### 5. AI Analysis
-
-After 10 seconds at 10% canary traffic, AI analysis begins:
-
-```bash
-# Watch analysis progress
-kubectl get analysisrun -n quarkus-demo -w
-
-# View analysis logs
-kubectl logs -n quarkus-demo -l app=kubernetes-agent -f
-```
-
-### 6. Decision Point
-
-At 50 seconds, AI makes a decision:
-- ✅ **PASS**: Rollout continues to 60% → 100%
-- ❌ **FAIL**: Rollout aborted, GitHub PR/Issue created
 
 ---
 
 ## Demo Flow
 
-### Complete Demo Script (All Three Scenarios)
+### Complete Demo Script (All Four Scenarios)
 
-**Total Time**: ~6 minutes
+**Total Time**: ~8 minutes
 
-#### Part 1: Scenario 1 - Happy Path (2 minutes)
+#### Part 1: Stable (2 min)
 
-```bash
-# 1. Deploy stable version
-kubectl apply -k progressive-delivery/workloads/quarkus-rollouts-demo/overlays/scenario-1-stable/
+1. Set image to `v1.stable`, commit, push
+2. Watch rollout -- AI finds no issues, rollout completes
+3. Show: AI correctly identifies healthy deployments
 
-# 2. Watch rollout (in separate terminal)
-kubectl argo rollouts get rollout quarkus-demo -n quarkus-demo --watch
+#### Part 2: NullPointerException (2 min)
 
-# 3. Explain what's happening:
-# - 10% traffic to canary (10s)
-# - AI analysis starts (40s)
-# - AI finds no issues
-# - Rollout continues to 60%, then 100%
+1. Set image to `v2.nullpointer`, commit, push
+2. Watch rollout -- AI detects NPE in canary logs, rollout aborts
+3. Show: GitHub PR created with automated code fix
+4. Key point: AI creates a **PR** because it can trace the bug to a specific code line
 
-# 4. Show AI analysis result
-kubectl get analysisrun -n quarkus-demo
-kubectl describe analysisrun <name> -n quarkus-demo
+#### Part 3: Memory Leak (2 min)
 
-# Expected: Phase: Successful, Message: "No issues detected"
-```
+1. Set image to `v3.memoryleak`, commit, push
+2. Watch rollout -- AI detects memory pressure and latency degradation, rollout aborts
+3. Show: GitHub Issue created with investigation steps
+4. Key point: AI creates an **Issue** because there's no obvious stack trace to fix
 
-#### Part 2: Scenario 2 - NullPointerException (1.5 minutes)
+#### Part 4: Slow Dependency (2 min)
 
-```bash
-# 1. Deploy buggy version
-kubectl apply -k progressive-delivery/workloads/quarkus-rollouts-demo/overlays/scenario-2-null-pointer/
-
-# 2. Watch rollout
-kubectl argo rollouts get rollout quarkus-demo -n quarkus-demo --watch
-
-# 3. Show canary logs with NPE errors
-kubectl logs -n quarkus-demo -l app=quarkus-demo,role=canary --tail=20
-
-# Expected: NullPointerException at UserResource.java:39
-
-# 4. Wait for AI analysis (40s)
-kubectl get analysisrun -n quarkus-demo -w
-
-# 5. Show rollout aborted
-kubectl argo rollouts get rollout quarkus-demo -n quarkus-demo
-
-# Expected: Status: Degraded, Message: "Analysis Failed"
-
-# 6. Check GitHub for PR
-# Expected: PR created with fix for NullPointerException
-```
-
-#### Part 3: Scenario 3 - Memory Leak (2 minutes)
-
-```bash
-# 1. Deploy memory leak version
-kubectl apply -k progressive-delivery/workloads/quarkus-rollouts-demo/overlays/scenario-3-memory-leak/
-
-# 2. Watch rollout
-kubectl argo rollouts get rollout quarkus-demo -n quarkus-demo --watch
-
-# 3. Show canary logs with performance warnings
-kubectl logs -n quarkus-demo -l app=quarkus-demo,role=canary --tail=30 -f
-
-# Expected: 
-# - "Performance degradation detected: Heap usage: 50MB"
-# - "CRITICAL: Severe performance degradation. Heap usage: 100MB"
-# - "CRITICAL: Application struggling. Heap usage: 150MB"
-
-# 4. Wait for AI analysis (40s)
-kubectl get analysisrun -n quarkus-demo -w
-
-# 5. Show rollout aborted
-kubectl argo rollouts get rollout quarkus-demo -n quarkus-demo
-
-# Expected: Status: Degraded, Message: "Analysis Failed"
-
-# 6. Check GitHub for Issue
-# Expected: Issue created recommending heap dump analysis
-```
+1. Set image to `v4.slowdependency`, commit, push
+2. Watch rollout -- AI detects downstream timeouts and circuit breaker warnings, rollout aborts
+3. Show: GitHub Issue created with downstream timeout diagnosis
+4. Key point: AI distinguishes between code bugs and infrastructure/dependency problems
 
 ### Key Demo Points
 
-1. **Built-in Load**: No need to run external load tests
-2. **Fast Analysis**: AI completes analysis in 40 seconds
-3. **Smart Decisions**: AI distinguishes between fixable (PR) and non-fixable (Issue) bugs
-4. **Automatic Remediation**: PRs include code fixes, Issues include investigation steps
-5. **GitOps-Driven**: All changes via git commits, no manual kubectl commands needed
+1. **No external tools needed** -- built-in load generator provides traffic
+2. **Fast analysis** -- AI completes analysis within the 40-second analysis window
+3. **Smart classification** -- AI distinguishes code bugs (PR) from operational issues (Issue)
+4. **Dynamic labels** -- Issue titles and labels reflect the specific root cause (memory leak vs timeout)
+5. **GitOps-driven** -- all scenario switches via image tag changes in git
 
 ---
 
 ## Building Scenario Images
 
-Scenario images are built automatically by GitHub Actions on every push to `main`.
-
-### GitHub Actions Workflow
-
-File: [`.github/workflows/build-scenario-images.yml`](../.github/workflows/build-scenario-images.yml)
-
-**Triggers**:
-- Push to `main` branch with changes in `argo-rollouts-quarkus-demo/**`
-- Manual workflow dispatch
-
-**Matrix Strategy**:
-```yaml
-matrix:
-  scenario:
-    - name: stable
-      tag: v1.stable
-      null_pointer: "false"
-      memory_leak: "false"
-    - name: null-pointer-bug
-      tag: v2.nullpointer
-      null_pointer: "true"
-      memory_leak: "false"
-    - name: memory-leak
-      tag: v3.memoryleak
-      null_pointer: "false"
-      memory_leak: "true"
-```
-
-**Build Process**:
-1. Checkout code
-2. Set up JDK 25
-3. Update `application.properties` with scenario-specific flags
-4. Build with Maven (`./mvnw clean package`)
-5. Build Docker image with `Dockerfile.jvm`
-6. Push to Quay.io with two tags:
-   - Version tag (e.g., `v1.stable`)
-   - Latest tag (e.g., `stable-latest`)
-
-### Manual Build
-
-To build images locally:
+### Locally with Maven + Podman
 
 ```bash
 cd argo-rollouts-quarkus-demo
 
-# Build Scenario 1 (Stable)
-./mvnw clean package -DskipTests
-docker build -f src/main/docker/Dockerfile.jvm \
-  -t quay.io/kevindubois/argo-rollouts-quarkus-demo:v1.stable .
+# Scenario 1: Stable
+mvn clean package -DskipTests \
+  -Dquarkus.container-image.build=true \
+  -Dquarkus.container-image.push=true \
+  -Dapp.version=v1.stable
 
-# Build Scenario 2 (NullPointerException)
-# First, edit src/main/resources/application.properties:
-# enable.null.pointer.bug=true
-./mvnw clean package -DskipTests
-docker build -f src/main/docker/Dockerfile.jvm \
-  -t quay.io/kevindubois/argo-rollouts-quarkus-demo:v2.nullpointer .
+# Scenario 2: NullPointerException
+sed -i 's/enable.null.pointer.bug=false/enable.null.pointer.bug=true/' \
+  src/main/resources/application.properties
+mvn clean package -DskipTests \
+  -Dquarkus.container-image.build=true \
+  -Dquarkus.container-image.push=true \
+  -Dapp.version=v2.nullpointer
+git checkout src/main/resources/application.properties
 
-# Build Scenario 3 (Memory Leak)
-# Edit src/main/resources/application.properties:
-# enable.memory.leak=true
-./mvnw clean package -DskipTests
-docker build -f src/main/docker/Dockerfile.jvm \
-  -t quay.io/kevindubois/argo-rollouts-quarkus-demo:v3.memoryleak .
+# Scenario 3: Memory Leak
+sed -i 's/enable.memory.leak=false/enable.memory.leak=true/' \
+  src/main/resources/application.properties
+mvn clean package -DskipTests \
+  -Dquarkus.container-image.build=true \
+  -Dquarkus.container-image.push=true \
+  -Dapp.version=v3.memoryleak
+git checkout src/main/resources/application.properties
+
+# Scenario 4: Slow Dependency
+sed -i 's/enable.slow.dependency=false/enable.slow.dependency=true/' \
+  src/main/resources/application.properties
+mvn clean package -DskipTests \
+  -Dquarkus.container-image.build=true \
+  -Dquarkus.container-image.push=true \
+  -Dapp.version=v4.slowdependency
+git checkout src/main/resources/application.properties
 ```
 
 ### Image Registry
 
-Images are hosted on Quay.io:
-- Repository: `quay.io/kevindubois/argo-rollouts-quarkus-demo`
-- Public visibility
-- Tags: `v1.stable`, `v2.nullpointer`, `v3.memoryleak`
+Images are hosted on Quay.io: `quay.io/danieloh30/argo-rollouts-quarkus-demo`
+
+Tags: `v1.stable`, `v2.nullpointer`, `v3.memoryleak`, `v4.slowdependency`
 
 ---
 
@@ -518,158 +285,48 @@ Images are hosted on Quay.io:
 
 ### Rollout Not Starting
 
-**Symptom**: Rollout stays in "Healthy" state after applying new overlay
-
-**Causes**:
-1. Image tag hasn't changed
-2. ArgoCD hasn't synced yet
-3. Rollout controller not running
-
-**Solutions**:
 ```bash
-# Check if image changed
-kubectl get rollout quarkus-demo -n quarkus-demo -o yaml | grep image:
+# Verify the image tag actually changed
+oc get rollout quarkus-demo -n quarkus-demo -o jsonpath='{.spec.template.spec.containers[0].image}'
 
-# Force ArgoCD sync
-argocd app sync quarkus-rollouts-demo
-
-# Check rollout controller
-kubectl get pods -n argo-rollouts
+# Check Argo CD sync status
+oc get app quarkus-rollouts-demo -n openshift-gitops
 ```
 
-### AI Analysis Stuck
+### AI Analysis Returning 500
 
-**Symptom**: AnalysisRun stays in "Running" state for more than 60 seconds
-
-**Causes**:
-1. Kubernetes agent not responding
-2. AI API rate limit exceeded
-3. Network connectivity issues
-
-**Solutions**:
 ```bash
-# Check kubernetes-agent logs
-kubectl logs -n quarkus-demo -l app=kubernetes-agent --tail=50
+# Check agent logs
+oc logs -n openshift-gitops -l app=kubernetes-agent --tail=50
 
-# Check analysis run status
-kubectl describe analysisrun <name> -n quarkus-demo
-
-# Restart kubernetes-agent
-kubectl rollout restart deployment kubernetes-agent -n quarkus-demo
+# Common causes:
+# - Invalid API key (check secret)
+# - Wrong Quarkus profile (check QUARKUS_PROFILE env var)
+# - Missing @V annotation on agent interfaces (MissingArgumentException)
 ```
 
 ### No GitHub PR/Issue Created
 
-**Symptom**: Rollout aborted but no GitHub activity
-
-**Causes**:
-1. GitHub token not configured
-2. Repository URL incorrect
-3. Insufficient permissions
-
-**Solutions**:
 ```bash
-# Check kubernetes-agent configuration
-kubectl get secret -n quarkus-demo kubernetes-agent-secret -o yaml
-
 # Check agent logs for GitHub errors
-kubectl logs -n quarkus-demo -l app=kubernetes-agent | grep -i github
+oc logs -n openshift-gitops -l app=kubernetes-agent | grep -i github
 
-# Verify GitHub token has correct permissions:
-# - repo (full control)
-# - workflow (if modifying workflows)
+# Verify GitHub token has 'repo' scope
+# Verify required labels exist on the repo:
+gh label list -R danieloh30/argo-rollouts-quarkus-demo
 ```
 
-### Load Generator Not Working
+### Slow Dependency Not Triggering Rollback
 
-**Symptom**: No traffic to canary pods
-
-**Causes**:
-1. Load generator disabled in configuration
-2. Pods not ready
-3. Service misconfiguration
-
-**Solutions**:
-```bash
-# Check load generator status in logs
-kubectl logs -n quarkus-demo -l app=quarkus-demo,role=canary | grep "Load generator"
-
-# Expected: "Load generator started - generating 50 requests/second"
-
-# Check pod readiness
-kubectl get pods -n quarkus-demo -l app=quarkus-demo
-
-# Check service endpoints
-kubectl get endpoints -n quarkus-demo
-```
-
-### Memory Leak Not Triggering
-
-**Symptom**: Scenario 3 doesn't show performance degradation
-
-**Causes**:
-1. Wrong image deployed
-2. Not enough time elapsed
-3. Insufficient load
-
-**Solutions**:
-```bash
-# Verify correct image
-kubectl get rollout quarkus-demo -n quarkus-demo -o yaml | grep image:
-# Expected: v3.memoryleak
-
-# Check memory usage
-kubectl top pods -n quarkus-demo -l app=quarkus-demo,role=canary
-
-# Wait at least 60 seconds for memory to accumulate
-# Check logs for memory warnings
-kubectl logs -n quarkus-demo -l app=quarkus-demo,role=canary | grep -i "heap usage"
-```
-
-### Rollout Aborted Too Early
-
-**Symptom**: Rollout aborted before AI analysis completes
-
-**Causes**:
-1. Analysis template misconfigured
-2. Timeout too short
-3. Metrics provider error
-
-**Solutions**:
-```bash
-# Check analysis template
-kubectl get analysistemplate ai-analysis-agent -n quarkus-demo -o yaml
-
-# Verify analysis timing in rollout
-kubectl get rollout quarkus-demo -n quarkus-demo -o yaml | grep -A 5 "analysis:"
-
-# Expected: startingStep: 2 (starts after 10s pause)
-# Expected: pause: { duration: 40s } (enough time for AI)
-```
-
----
-
-## Additional Resources
-
-- **Main README**: [README.md](README.md) - Application overview
-- **Deployment Guide**: [DEPLOYMENT.md](DEPLOYMENT.md) - Detailed deployment instructions
-- **Bug Scenarios**: [BUG_SCENARIOS.md](BUG_SCENARIOS.md) - Technical details of bug implementations
-- **Kubernetes Agent**: [kubernetes-agent/README.md](../kubernetes-agent/README.md) - AI agent documentation
-- **Progressive Delivery**: [progressive-delivery/README.md](../progressive-delivery/README.md) - GitOps structure
+The v4.slowdependency scenario has phased timing. Timeouts start at 20 seconds after pod startup. If the analysis runs before that window, it may see healthy behavior. Ensure the rollout analysis starts late enough (configured via `startingStep` in the rollout spec).
 
 ---
 
 ## Summary
 
-The container-based approach provides:
-
-✅ **Simplified Demos**: No external tools needed, everything self-contained  
-✅ **Fast Analysis**: Built-in load ensures AI has data within 40 seconds  
-✅ **Realistic Scenarios**: Three distinct behaviors (stable, NPE, memory leak)  
-✅ **Automated CI/CD**: GitHub Actions builds all images automatically  
-✅ **GitOps-Ready**: Kustomize overlays enable easy scenario switching  
-✅ **Smart Remediation**: AI creates PRs for fixable bugs, Issues for complex problems  
-
-**Next Steps**: Try the [Demo Flow](#demo-flow) to see all three scenarios in action!
-
----
+| Scenario | Image Tag | Bug Type | AI Action | GitHub Artifact |
+|----------|-----------|----------|-----------|-----------------|
+| Stable | `v1.stable` | None | Promote | None |
+| NPE | `v2.nullpointer` | Code bug | Rollback | **PR** with fix |
+| Memory Leak | `v3.memoryleak` | Operational | Rollback | **Issue** with RCA |
+| Slow Dependency | `v4.slowdependency` | Operational | Rollback | **Issue** with RCA |
