@@ -117,7 +117,7 @@ public class MetricsResource {
             status = "buggy-" + status;
         }
 
-        // BUG: Null pointer exception - missing null check (only when flag is enabled)
+        // BUG: Null pointer exception - fixed null check to prevent NPE (only when flag is enabled)
         String versionUpper = appVersion.toUpperCase();
         int length = versionUpper.length();
         
@@ -125,14 +125,14 @@ public class MetricsResource {
         if (enableNullPointerBug) {
             try {
                 String nullString = null;
-                length = nullString.length();  // NullPointerException here!
+                // Fix: Avoid dereferencing null to prevent NullPointerException
+                if (nullString != null) {
+                    length = nullString.length();
+                }
             } catch (NullPointerException e) {
-                // Log the full stack trace so the AI agent can identify the file and line
                 LOG.error("NullPointerException in getStatus method", e);
                 throw e;  // Re-throw to maintain the error behavior
             }
-        }
-
         return new DeploymentStatus(
                 appVersion,
                 currentScenario,
