@@ -81,12 +81,12 @@ public class LoadGeneratorService {
                     if (Math.random() < 0.2) {
                         // Call user endpoint with random user ID (1-10)
                         int userId = (int) (Math.random() * 10) + 1;
-                        userResource.getUser(String.valueOf(userId));
-                    } else {
-                        // Call the status endpoint
-                        metricsResource.getStatus();
-                    }
-                    
+                        if(userResource != null) {
+                            userResource.getUser(String.valueOf(userId));
+                        }
+                        if(metricsResource != null) {
+                            metricsResource.getStatus();
+                        }
                     long count = totalGeneratedRequests.incrementAndGet();
                     
                     // Log progress every 100 requests
