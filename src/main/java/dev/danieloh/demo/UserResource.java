@@ -36,7 +36,7 @@ public class UserResource {
         
         // BUG: No null check when bug is enabled
         User user = findUser(userId);
-        String userName = user.getName(); // NPE when user is null!
+        String userName = user != null ? user.getName() : "Unknown User"; // Added null check to prevent NPE
         return Response.ok()
             .entity(Map.of("id", userId, "name", userName))
             .build();
